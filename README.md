@@ -1,7 +1,6 @@
-# SETD
-Code for the SETD paper
+Code for the SETD paper.
 
-# Getting started
+## Getting started
 
 > [!IMPORTANT]
 > This is not a Julia package. You cannot install it with `add SETD`.
