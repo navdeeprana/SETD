@@ -1,5 +1,7 @@
 # Implements CGLE.
 # ∂_t u = u - (1+ic) |p|^2 p + (1+ib) ∇^2 p + sqrt(2D) eta.
+#
+# Abuses namedtuples to create structures on the fly.
 
 function create_grid(nx, lx)
     Δx = lx / nx
@@ -99,9 +101,7 @@ function solve(sim, tmax, h, saveat, save_after)
     nothing
 end
 
-# Define a jldsave function to write all parameters in a group.
-# With all these information, one can reproduce the exact results of the simulation.
-
+# Define a custom jldsave function create groups.
 function myjldsave(fout, group; kwargs...)
     jldsave(fout; (Symbol("$(group)/$(k)") => v for (k, v) in pairs(kwargs))...)
 end
@@ -111,6 +111,7 @@ cgle_vars(u0) = (; u = copy(u0), uk = zero(u0), duk = zero(u0), nl = zero(u0))
 function cgle_simulation(nx, lx, pars, tmax, h, saveat, save_after, seed, fout)
     # Set random seed
     Random.seed!(seed)
+    # Store parameters, simulations can be reproduced exactly from the parameters.
     myjldsave(fout, "parameters"; nx, lx, tmax, h, saveat, save_after, seed, pars...)
     grid = create_grid(nx, lx)
     u0 = wave(pars.q, grid.x)
@@ -127,7 +128,6 @@ function Cet(k, q, D, c)
     num = @. (k^2 - 2k*q + R^2)*(k^4+2k^2*R^2+(1+c^2)R^4)
     den = @. (2k^2)*(k^6 + 4k^4*(R^2-q^2) + k^2*R^2*(5R^2-8q^2)-4(1+c^2)*q^2*R^4+2R^6)
     Ck = @. (2D) * num / den
-    # Ck[argmax(Ck)] = R^2
     return Ck
 end
 
