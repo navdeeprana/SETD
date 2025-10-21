@@ -1,4 +1,4 @@
-KERNEL_NAME := sohrab-1.10
+KERNEL_NAME := julia-1.10
 
 
 IPYNB := $(wildcard *.ipynb)
