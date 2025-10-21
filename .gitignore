@@ -1,4 +1,6 @@
 # Project specific
+data/*
+figs/*
 *Manifest.toml
 *.ipynb
 
