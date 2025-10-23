@@ -26,7 +26,7 @@ includet("src/brownian.jl")
 includet("src/sde_examples.jl")
 includet("src/solve.jl")
 colors = Makie.wong_colors();
-set_theme!(merge(theme_latexfonts(), makietheme()))
+set_theme!(makietheme())
 CairoMakie.enable_only_mime!("html")
 Random.seed!(42);
 
@@ -81,20 +81,20 @@ end
 
 # %%
 n=10
-fig, axes = figax(nx = 3, xlabel = L"t")
+fig, axes = figax(nx = 3, xlabel = L"t", xticks = 0:1:2)
+axes[2].yticklabelsvisible = false
 ax = axes[1]
 ax.title="GBM trajectories"
 ax.ylabel=L"u(t)"
 _plot_sol!(ax, sol_em, n; color = colors[1], label = "EM")
 _plot_sol!(ax, sol_ml, n; color = colors[2], label = "Milstein")
-_plot_sol!(ax, sol_an, n; color = (:black, 0.9), label = "Analytical")
+_plot_sol!(ax, sol_an, n; color = (:black, 0.7), label = "Analytical")
 
 ax = axes[2]
 ax.title="GBM trajectories"
-ax.ylabel=L"u(t)"
 _plot_sol!(ax, sol_ea, n; color = colors[3], label = "SETD-EM")
 _plot_sol!(ax, sol_eb, n; color = colors[4], label = "SETD-Milstein")
-_plot_sol!(ax, sol_an, n; color = (:black, 0.9), label = "Analytical")
+_plot_sol!(ax, sol_an, n; color = (:black, 0.7), label = "Analytical")
 
 ax = axes[3]
 ax.limits = (nothing, nothing, 1.e-2, 1.e+2)
@@ -106,9 +106,9 @@ _plot_rms_error!(ax, sol_ml, sol_an, label = "Milstein")
 _plot_rms_error!(ax, sol_ea, sol_an, label = "SETD-EM")
 _plot_rms_error!(ax, sol_eb, sol_an, label = "SETD-Milstein")
 
-axislegend(axes[1], position = :lb, nbanks = 3)
-axislegend(axes[2], position = :lb, nbanks = 3)
-axislegend(axes[3], position = :rb, nbanks = 2)
+axislegend(axes[1], position = :lb, nbanks = 3, labelsize = 28)
+axislegend(axes[2], position = :lb, nbanks = 3, labelsize = 28)
+axislegend(axes[3], position = :rb, nbanks = 2, labelsize = 28)
 resize_to_layout!(fig)
 save("figs/GBM_algorithm_comparison.pdf", fig)
 fig
@@ -168,7 +168,7 @@ function plot_convergence(fig, ax1, ax2, cvg; kwargs...)
 end
 
 # %%
-fig, axes = figax(nx = 2, ny = 2, xscale = log2, yscale = log2, xlabel = L"h")
+fig, axes = figax(nx = 2, ny = 2, xscale = log2, s = 130, yscale = log2, xlabel = L"h")
 axes[1].title = "Strong convergence for SETD-EM"
 axes[2].title = "Weak convergence for SETD-EM"
 axes[3].title = "Strong convergence for SETD-Milstein"
@@ -282,17 +282,20 @@ function stability_region_plot!(ax, f, x, y, p, color; alpha = 0.1, kw...)
 end
 
 # %%
-fig, axis = figax(nx = 3, ny = 1, xlabel = L"$\lambda h$", ylabel = L"$\mu^2 h$")
+fig, axes = figax(nx = 3, ny = 1, xlabel = L"$\lambda h$", xticks = -5:1:1, yticks = 0:2:6)
+axes[1].ylabel = L"$\mu^2 h$"
+axes[2].yticklabelsvisible=false
+axes[3].yticklabelsvisible=false
 
 x = -6:0.05:1.0
 y = 0:0.05:7
 
-ax = axis[1]
+ax = axes[1]
 stability_region_plot!(ax, stability_GBM, x, y, p, :black; alpha = 0.05)
 stability_region_plot!(ax, stability_EM, x, y, p, colors[1])
 stability_region_plot!(ax, stability_Milstein, x, y, p, colors[2])
 
-for (ax, z) in zip(axis[2:end], [0.3, 0.5])
+for (ax, z) in zip(axes[2:end], [0.3, 0.5])
     p = (; a = -2.0, z = z)
     stability_region_plot!(ax, stability_GBM, x, y, p, :black; alpha = 0.05)
     stability_region_plot!(ax, stability_SETDEM, x, y, p, colors[1]; label = "SETD-EM")

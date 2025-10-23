@@ -26,7 +26,7 @@ includet("src/brownian.jl")
 includet("src/sde_examples.jl")
 includet("src/solve.jl")
 colors = Makie.wong_colors();
-set_theme!(merge(theme_latexfonts(), makietheme()))
+set_theme!(makietheme())
 CairoMakie.enable_only_mime!("html")
 Random.seed!(42);
 
@@ -49,10 +49,10 @@ function SAO_SETD(p)
 end
 
 # %%
-p_rest = (; u0 = 0.0, tmax = 10.0, nens = 10000, T = 6.0, Γ = 5.0, b = 1.e-2, z = 3, saveat = 0.1, save_after = 2.0);
+p_rest = (; u0 = 0.0, tmax = 20.0, nens = 10000, T = 6.0, Γ = 5.0, b = 1.e-2, z = 3, saveat = 0.2, save_after = 2.0);
 
 # %%
-p = (; dt = 1.e-1, p_rest...)
+p = (; dt = 2.e-1, p_rest...)
 dW = [SampledWeinerIncrement(p.dt, p.tmax) for _ in 1:p.nens]
 args, kwargs = (p.u0, p.tmax, p.saveat), (; save_after = p.save_after)
 sol_em1 = map(dWi -> solve(SAO(p), EulerMaruyama(p.dt), dWi, args...; kwargs...), dW);
@@ -80,31 +80,34 @@ function probability_distribution(sol; bins = -9:0.2:9)
 end
 
 # %%
-fig, axes = figax(nx = 3, xlabel = L"$u$", limits = (-9, 9, -0.01, 0.23), yticks = [0.0, 0.1, 0.2])
+fig, axes = figax(nx = 3, xlabel = L"$u$", limits = (-9, 9, -0.01, 0.23), xticks = -8:4:8, yticks = [0.0, 0.1, 0.2])
 axes[1].ylabel = L"$P(u)$"
-for ax in axes
-    plot_boltzmann_distribution!(ax, p, 9.0; color = (:black, 0.15), linewidth = 10)
-end
 
 axes[1].title = ("EM")
 P = probability_distribution(sol_em1)
-lines!(axes[1], P.x, P.P; linewidth = 5, label = "h=0.1")
+lines!(axes[1], P.x, P.P; linewidth = 5, label = "h=0.2")
 P = probability_distribution(sol_em2)
 lines!(axes[1], P.x, P.P; linewidth = 5, label = "h=0.01")
 
 axes[2].title = ("SETD-EM")
+axes[2].yticklabelsvisible = false
 P = probability_distribution(sol_et1)
-lines!(axes[2], P.x, P.P; linewidth = 5, label = "h=0.1")
+lines!(axes[2], P.x, P.P; linewidth = 5, label = "h=0.2")
 P = probability_distribution(sol_et2)
 lines!(axes[2], P.x, P.P; linewidth = 5, label = "h=0.01")
 
 axes[3].title = ("SETD1")
+axes[3].yticklabelsvisible = false
 P = probability_distribution(sol_ex1)
-lines!(axes[3], P.x, P.P; linewidth = 5, label = "h=0.1")
+lines!(axes[3], P.x, P.P; linewidth = 5, label = "h=0.2")
 P = probability_distribution(sol_ex2)
 lines!(axes[3], P.x, P.P; linewidth = 5, label = "h=0.01")
 
-axislegend.(axes)
+for ax in axes
+    plot_boltzmann_distribution!(ax, p, 9.0; color = :black, linewidth = 3, linestyle = :dash)
+end
+
+axislegend.(axes; patchsize = (35, 20))
 resize_to_layout!(fig)
 save("figs/SAO_probability.pdf", fig)
 fig
@@ -161,6 +164,8 @@ end
 # %%
 fig, axes = figax(nx = 3, yscale = log10, xlabel = L"\omega")
 axes[1].ylabel=L"C(\omega)"
+axes[2].yticklabelsvisible=false
+axes[3].yticklabelsvisible=false
 
 w, C = correlator(sol_em)
 lines!(axes[1], w, C, label = "EM")
@@ -176,10 +181,9 @@ for ax in axes
     lines!(ax, w, Can, color = (colors[2], 0.5), linewidth = 8, label = "Discrete")
 end
 
-axislegend.(axes, position = :cb)
-
-save("figs/OU_correlators.pdf")
+axislegend.(axes, position = :cb, patchsize = (35, 25))
 resize_to_layout!(fig)
+save("figs/OU_correlators.pdf")
 fig
 
 # %%
@@ -240,5 +244,6 @@ lines!(ax, x, OU_SETDEM_var.(p.k, p.D, x, -0.5), color = (colors[2], 0.5), linew
 lines!(ax, x, OU_SETD1_var.(p.k, p.D, x, -0.5), color = (colors[3], 0.5), linewidth = 5)
 lines!(ax, x, fill(0.5, length(x)), color = (:black, 0.5), linewidth = 5, label = "Analytical")
 axislegend(ax, position = :lt, nbanks = 2)
+resize_to_layout!(fig)
 save("figs/OU_asymptotic_variance.pdf")
 fig

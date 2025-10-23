@@ -1,7 +1,7 @@
 # Create a makie theme for plotting.
 function makietheme()
-    return Theme(
-        fontsize = 25,
+    theme = Theme(
+        fontsize = 30,
         Axis = (
             backgroundcolor = :transparent,
             xgridvisible = false,
@@ -19,12 +19,13 @@ function makietheme()
         Lines = (linewidth = 3.0,),
         Scatter = (markersize = 20,)
     )
+    return merge(theme_latexfonts(), theme)
 end
 
 # Create a grid of axis to plot into.
-function figax(; nx = 1, ny = 1, h = 5, a = 1.6, s = 100, fontsize = 24, sharex = false, sharey = false, kwargs...)
+function figax(; nx = 1, ny = 1, h = 5, a = 1.6, s = 100, sharex = false, sharey = false, kwargs...)
     (a > 1) ? size = (a * s * h * nx, s * h * ny) : size = (s * h * nx, s * h * ny / a)
-    fig = Figure(; size = round.(Int, size), fontsize)
+    fig = Figure(; size = round.(Int, size))
     ax = [Axis(fig[j, i]; aspect = AxisAspect(a), kwargs...) for i in 1:nx, j in 1:ny]
     for i in 1:nx
         colsize!(fig.layout, i, Aspect(1, a))

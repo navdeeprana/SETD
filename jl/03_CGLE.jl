@@ -25,7 +25,7 @@ using CairoMakie, StatsBase
 includet("src/cgle.jl")
 includet("src/plotting.jl")
 colors = Makie.wong_colors()
-set_theme!(merge(theme_latexfonts(), makietheme()))
+set_theme!(makietheme())
 
 # %% [markdown]
 # # Test Simulation
@@ -74,7 +74,7 @@ function logspaced(x; base = 1.2)
 end
 
 # %%
-fig, axes = figax(nx = 2, yscale = log10, xlabel = L"k", ylabel = L"C_{\text{ET}}(k)")
+fig, axes = figax(nx = 2, yscale = log10, s = 120, xlabel = L"k", ylabel = L"C_{\text{ET}}(k)")
 
 axes[1].limits = (-1, 1, 5.e-3, 1.e+3)
 axes[1].xscale = Makie.pseudolog10
@@ -110,3 +110,5 @@ axislegend.(axes, position = :rt)
 resize_to_layout!(fig)
 save("figs/CGLE_correlators.pdf", fig)
 fig
+
+# %%
