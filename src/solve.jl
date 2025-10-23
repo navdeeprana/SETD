@@ -104,12 +104,6 @@ function compute_convergence!(cvg, h, sol, sol_an, mean_an)
     end
 end
 
-function tnWn(t, W, twhen)
-    skip = (length(t) - 1) ÷ round(Int, t[end] / twhen)
-    @views tn, Wn = t[1:skip:end], W[1:skip:end, :]
-    return tn, Wn
-end
-
 function convergence(s, int_constructor, p, h_cvg, t, W, sol_an, mean_an)
     cvg = DataFrame(t = Float64[], h = Float64[], es = Float64[], ew = Float64[], ew_an = Float64[])
     for h in h_cvg
