@@ -92,20 +92,19 @@ function solve(s::SDE, int::Integrator, dW::AbstractWeinerIncrement, u0, tmax, s
     return sol
 end
 
-function compute_convergence!(cvg, h, sol, sol_an, mean_an)
+function compute_convergence!(cvg, h, sol, sol_an)
     for (i, ti) in enumerate(sol[1].t)
         ti == 0 ? continue : nothing
         u = [s.u[i] for s in sol]
-        uan = [s[i] for s in sol_an]
+        uan = [s.u[i] for s in sol_an]
         es = mean(@. abs(u - uan))
         ew = abs(mean(u) - mean(uan))
-        ew_an = abs(mean(u) - mean_an[i])
-        push!(cvg, (ti, h, es, ew, ew_an))
+        push!(cvg, (ti, h, es, ew))
     end
 end
 
-function convergence(s, int_constructor, p, h_cvg, t, W, sol_an, mean_an)
-    cvg = DataFrame(t = Float64[], h = Float64[], es = Float64[], ew = Float64[], ew_an = Float64[])
+function convergence(s, int_constructor, p, h_cvg, t, W, sol_an)
+    cvg = DataFrame(t = Float64[], h = Float64[], es = Float64[], ew = Float64[])
     for h in h_cvg
         tn, Wn = tnWn(t, W, h)
         sol = map(
@@ -116,7 +115,23 @@ function convergence(s, int_constructor, p, h_cvg, t, W, sol_an, mean_an)
             ),
             eachcol(Wn)
         )
-        compute_convergence!(cvg, h, sol, sol_an, mean_an)
+        compute_convergence!(cvg, h, sol, sol_an)
     end
+    return cvg
+end
+
+# Weak convergence does not require access to the Weiner process so we can compute it in a simpler way.
+function weak_convergence(s, int_constructor, p, h_cvg; scale = 4)
+    cvg = DataFrame(t = Float64[], h = Float64[], es = Float64[], ew = Float64[])
+
+    h_small = minimum(h_cvg)/scale
+    dW = [InstantWeinerIncrement(h_small, sqrt(h_small)) for _ in 1:p.nens]
+    sol_an = map(dWi -> solve(s, EulerMaruyama(h_small), dWi, p.u0, p.tmax, p.saveat), dW);
+    for h in h_cvg
+        dW = [InstantWeinerIncrement(h, sqrt(h)) for _ in 1:p.nens]
+        sol = map(dWi -> solve(s, int_constructor(h), dWi, p.u0, p.tmax, p.saveat), dW)
+        compute_convergence!(cvg, h, sol, sol_an)
+    end
+    cvg.es .= 0.0 # Strong convergence is wrong for this method.
     return cvg
 end

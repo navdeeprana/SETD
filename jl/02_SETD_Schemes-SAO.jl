@@ -113,6 +113,55 @@ save("figs/SAO_probability.pdf", fig)
 fig
 
 # %% [markdown]
+# # Convergence for the SAO
+
+# %%
+p_rest = (; u0 = 3.0, tmax = 0.5, T = 0.5, Γ = 1.0, b = 1.e-1, z = 3, saveat = 1/2^1);
+
+h_cvg = @. 1 / 2^(4:9)
+
+# First use an EM for approximating the analytical solution
+h_small = minimum(h_cvg)/4
+p = (dt = h_small, nens = 50000, p_rest...)
+t, W = weiner_process(h_small, p.tmax, p.nens)
+
+dW = [ComputedWeinerIncrement(h_small, sqrt(h_small), Wi) for Wi in eachcol(W)]
+args = (p.u0, p.tmax, p.saveat)
+sol_an = map(dWi -> solve(SAO(p), EulerMaruyama(p.dt), dWi, args...), dW);
+
+# %%
+_SETDEulerMaruyama(h) = SETDEulerMaruyama(h, -p.Γ)
+_SETD1(h) = SETD1(h, -p.Γ)
+cvg = (
+    em = convergence(SAO(p), EulerMaruyama, p, h_cvg, t, W, sol_an),
+    etdem = convergence(SAO_SETD(p), _SETDEulerMaruyama, p, h_cvg, t, W, sol_an)
+);
+
+# %%
+p = (nens = 300000, p_rest...)
+_SETD1(h) = SETD1(h, -p.Γ)
+weak_cvg = (; etd1 = weak_convergence(SAO_SETD(p), EulerMaruyama, p, h_cvg));
+
+# %%
+fig, axes = figax(nx = 2, ny = 1, xscale = log2, s = 130, yscale = log2, xlabel = L"h")
+axes[1].yticks = (collect(2.0 .^ (-10:2:4)), [L"2^{%$i}" for i in -10:2:4])
+axes[2].yticks = (collect(2.0 .^ (-10:2:4)), [L"2^{%$i}" for i in -10:2:4])
+axes[1].title = "Strong convergence for SAO"
+axes[2].title = "Weak convergence for SAO"
+plot_convergence(fig, axes[1], axes[2], cvg.em, marker = :circle, label = "EM")
+plot_convergence(fig, axes[1], axes[2], cvg.etdem, marker = :circle, label = "SETD-EM")
+plot_convergence(fig, axes[1], axes[2], weak_cvg.etd1; ignore_es = true, marker = :circle, label = "SETD1")
+for (ax, a, n, text, yf) in zip(axes, [1.5, 1.5], [1.0, 1.0], [L"h", L"h"], [1.2, 1.2])
+    lines!(ax, h_cvg, (@. a * h_cvg^n), linewidth = 3, color = :black)
+    x = (h_cvg[3] + h_cvg[4])/2
+    text!(ax, x, yf*a*(x^n); text, fontsize = 30)
+end
+axislegend.(axes, position = :rb)
+resize_to_layout!(fig)
+save("figs/SAO_convergence.pdf", fig)
+fig
+
+# %% [markdown]
 # # Correlators and asymptotic variance for the OU-process
 
 # %%

@@ -46,7 +46,7 @@ struct ComputedWeinerIncrement{T} <: AbstractWeinerIncrement
 end
 
 function ComputedWeinerIncrement(h::T, tmax::T) where {T}
-    t, W = brownian_motion(h, tmax)
+    t, W = weiner_process(h, tmax)
     ComputedWeinerIncrement{T}(h, sqrt(h), W)
 end
 

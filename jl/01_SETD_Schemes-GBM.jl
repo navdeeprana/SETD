@@ -45,7 +45,7 @@ function GBM_SETD(p)
     return SDE(f, g, dg, p)
 end
 
-GBM_ANALYTICAL(p, t, W) = (; t, u = gbm_analytical.(p.u0, p.a, p.b, t, W))
+gbm_analytical(p, t, W) = (; t, u = gbm_analytical.(p.u0, p.a, p.b, t, W))
 
 # %%
 p_rest = (u0 = 1.0, tmax = 2.0, a = 2.0, b = 1.0, nens = 1024, dt = 1/2^4)
@@ -53,7 +53,7 @@ p = (δ = 0.5, p_rest...)
 dW = [SampledWeinerIncrement(p.dt, p.tmax) for _ in 1:p.nens]
 t = 0:p.dt:p.tmax
 W = map(dWi -> brownian_motion(dWi), dW);
-sol_an = map(Wi -> GBM_ANALYTICAL(p, t, Wi), W);
+sol_an = map(Wi -> gbm_analytical(p, t, Wi), W);
 
 # %%
 sol_em = map(dWi -> solve(GBM(p), EulerMaruyama(p.dt), dWi, p.u0, p.tmax, p.dt), dW);
@@ -126,7 +126,7 @@ fig
 # fig
 
 # %% [markdown]
-# ## Convergence for the GBM
+# # Convergence for the GBM
 
 # %%
 p_rest = (u0 = 1.0, tmax = 1.0, a = 2.0, b = 1.0, nens = 50000, saveat = 1/2^1)
@@ -134,17 +134,16 @@ p = (δ = 0.5, p_rest...)
 h_cvg = @. 1 / 2^(5:10)
 t, W = brownian_motion(minimum(h_cvg), p.tmax, p.nens);
 tn, Wn = tnWn(t, W, p.saveat)
-sol_an = map(Wni -> gbm_analytical.(p.a, p.b, tn, Wni), eachcol(Wn));
-mean_an = @. p.u0 * exp(p.a*tn);
+sol_an = map(Wni -> gbm_analytical(p, tn, Wni), eachcol(Wn));
 
 # %%
 _SETDEulerMaruyama(h) = SETDEulerMaruyama(h, p.a-p.δ)
 _SETDMilstein(h) = SETDMilstein(h, p.a-p.δ)
 cvg1 = (
-    # em = convergence(GBM(p), EulerMaruyama, p, h_cvg, t, W, sol_an, mean_an),
-    # ml = convergence(GBM(p), Milstein, p, h_cvg, t, W, sol_an, mean_an),
-    etdem = convergence(GBM_SETD(p), _SETDEulerMaruyama, p, h_cvg, t, W, sol_an, mean_an),
-    etdml = convergence(GBM_SETD(p), _SETDMilstein, p, h_cvg, t, W, sol_an, mean_an)
+    # em = convergence(GBM(p), EulerMaruyama, p, h_cvg, t, W, sol_an)
+    # ml = convergence(GBM(p), Milstein, p, h_cvg, t, W, sol_an)
+    etdem = convergence(GBM_SETD(p), _SETDEulerMaruyama, p, h_cvg, t, W, sol_an),
+    etdml = convergence(GBM_SETD(p), _SETDMilstein, p, h_cvg, t, W, sol_an)
 );
 
 # %%
@@ -152,32 +151,24 @@ p = (δ = 1.0, p_rest...)
 _SETDEulerMaruyama(h) = SETDEulerMaruyama(h, p.a-p.δ)
 _SETDMilstein(h) = SETDMilstein(h, p.a-p.δ)
 cvg2 = (
-    # em = convergence(GBM(p), EulerMaruyama, p, h_cvg, t, W, sol_an),
-    # ml = convergence(GBM(p), Milstein, p, h_cvg, t, W, sol_an),
-    etdem = convergence(GBM_SETD(p), _SETDEulerMaruyama, p, h_cvg, t, W, sol_an, mean_an),
-    etdml = convergence(GBM_SETD(p), _SETDMilstein, p, h_cvg, t, W, sol_an, mean_an)
+    etdem = convergence(GBM_SETD(p), _SETDEulerMaruyama, p, h_cvg, t, W, sol_an),
+    etdml = convergence(GBM_SETD(p), _SETDMilstein, p, h_cvg, t, W, sol_an)
 );
 
 # %%
-function plot_convergence(fig, ax1, ax2, cvg; kwargs...)
-    g = groupby(cvg, :t)[end]
-    (; h, es, ew, ew_an) = g
-    kw = (markersize = 25, linestyle = :dash, linewidth = 3)
-    scatterlines!(ax1, h, es; kw..., kwargs...)
-    scatterlines!(ax2, h, ew; kw..., kwargs...)
-end
-
-# %%
 fig, axes = figax(nx = 2, ny = 2, xscale = log2, s = 130, yscale = log2, xlabel = L"h")
-axes[1].title = "Strong convergence for SETD-EM"
-axes[2].title = "Weak convergence for SETD-EM"
-axes[3].title = "Strong convergence for SETD-Milstein"
-axes[4].title = "Weak convergence for SETD-Milstein"
+axes[1].yticks = (collect(2.0 .^ (-3:1:1)), [L"2^{%$i}" for i in -3:1:1])
+axes[2].yticks = (collect(2.0 .^ (-8:2:2)), [L"2^{%$i}" for i in -8:2:2])
+axes[3].yticks = (collect(2.0 .^ (-8:2:2)), [L"2^{%$i}" for i in -8:2:2])
+axes[4].yticks = (collect(2.0 .^ (-8:2:2)), [L"2^{%$i}" for i in -8:2:2])
+axes[1].title = "Strong convergence of SETD-EM for GBM"
+axes[2].title = "Weak convergence of SETD-EM for GBM"
+axes[3].title = "Strong convergence of SETD-Milstein for GBM"
+axes[4].title = "Weak convergence of SETD-Milstein for GBM"
 plot_convergence(fig, axes[1], axes[2], cvg1.etdem, marker = :circle, label = L"$\delta = 0.5$")
 plot_convergence(fig, axes[1], axes[2], cvg2.etdem, marker = :rect, label = L"\delta = 1.0")
 plot_convergence(fig, axes[3], axes[4], cvg1.etdml, marker = :circle, label = L"\delta = 0.5")
 plot_convergence(fig, axes[3], axes[4], cvg2.etdml, marker = :rect, label = L"\delta = 1.0")
-# axes[3].yticks = @. 2^(-8:-2:-2)
 for (ax, a, n, text, yf) in zip(axes, [3, 2.5, 5, 2.5], [0.5, 1.0, 1.0, 1.0], [L"h^{1/2}", L"h", L"h", L"h"], [0.75, 0.55, 0.55, 0.55])
     lines!(ax, h_cvg, (@. a * h_cvg^n), linewidth = 3, color = :black)
     x = (h_cvg[3] + h_cvg[4])/2

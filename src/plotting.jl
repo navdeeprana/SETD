@@ -40,18 +40,18 @@ function errorscatter!(ax, x, y, dy; kw...)
     errorbars!(ax, x, y, dy; color = p.color, whiskerwidth = 0.5*to_value(p.markersize)[1])
 end
 
+function plot_convergence(fig, ax1, ax2, cvg; ignore_es = false, kwargs...)
+    g = groupby(cvg, :t)[end]
+    (; h, es, ew) = g
+    kw = (markersize = 25, linestyle = :dash, linewidth = 3)
+    if !ignore_es
+        scatterlines!(ax1, h, es; kw..., kwargs...)
+    end
+    scatterlines!(ax2, h, ew; kw..., kwargs...)
+end
+
 # General power law
 power_law(x, x0, p, a) = @. a * (x / x0)^p
-
-function plot_convergence(fig, ax, cvg, ps, pw; f = minimum)
-    (; Δt, N, es, ew) = cvg
-    scatterlines!(ax, Δt, es, label = "Strong", markersize = 20, linestyle = :dash)
-    scatterlines!(ax, Δt, ew, label = "Weak", markersize = 20, linestyle = :dash)
-    lines!(ax, Δt, power_law(Δt, f(Δt), ps, f(es)), color = :black)
-    lines!(ax, Δt, power_law(Δt, f(Δt), pw, f(ew)), color = :red)
-    axislegend(ax, position = :rb)
-    ax.xlabel = "Δt"
-end
 
 plot_probability_distribution!(ax, X; bins = 256, kw...) = stephist!(ax, X; normalization = :pdf, bins, kw...)
 
