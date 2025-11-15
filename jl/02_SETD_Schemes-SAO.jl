@@ -8,7 +8,7 @@
 #       format_version: '1.3'
 #       jupytext_version: 1.17.3
 #   kernelspec:
-#     display_name: julia 1.10.10
+#     display_name: Julia 1.10
 #     language: julia
 #     name: julia-1.10
 # ---
@@ -53,7 +53,7 @@ p_rest = (; u0 = 0.0, tmax = 20.0, nens = 10000, T = 6.0, Γ = 5.0, b = 1.e-2, z
 
 # %%
 p = (; dt = 2.e-1, p_rest...)
-dW = [SampledWeinerIncrement(p.dt, p.tmax) for _ in 1:p.nens]
+dW = [SampledWienerIncrement(p.dt, p.tmax) for _ in 1:p.nens]
 args, kwargs = (p.u0, p.tmax, p.saveat), (; save_after = p.save_after)
 sol_em1 = map(dWi -> solve(SAO(p), EulerMaruyama(p.dt), dWi, args...; kwargs...), dW);
 sol_et1 = map(dWi -> solve(SAO_SETD(p), SETDEulerMaruyama(p.dt, -p.Γ, 0.5), dWi, args...; kwargs...), dW);
@@ -61,7 +61,7 @@ sol_ex1 = map(dWi -> solve(SAO_SETD(p), SETD1(p.dt, -p.Γ), dWi, args...; kwargs
 
 # %%
 p = (; dt = 1.e-2, p_rest...)
-dW = [SampledWeinerIncrement(p.dt, p.tmax) for _ in 1:p.nens]
+dW = [SampledWienerIncrement(p.dt, p.tmax) for _ in 1:p.nens]
 args, kwargs = (p.u0, p.tmax, p.saveat), (; save_after = p.save_after)
 sol_em2 = map(dWi -> solve(SAO(p), EulerMaruyama(p.dt), dWi, args...; kwargs...), dW);
 sol_et2 = map(dWi -> solve(SAO_SETD(p), SETDEulerMaruyama(p.dt, -p.Γ, 0.5), dWi, args...; kwargs...), dW);
@@ -123,24 +123,26 @@ h_cvg = @. 1 / 2^(4:9)
 # First use an EM for approximating the analytical solution
 h_small = minimum(h_cvg)/4
 p = (dt = h_small, nens = 50000, p_rest...)
-t, W = weiner_process(h_small, p.tmax, p.nens)
+t, W = wiener_process(h_small, p.tmax, p.nens)
 
-dW = [ComputedWeinerIncrement(h_small, sqrt(h_small), Wi) for Wi in eachcol(W)]
+dW = [ComputedWienerIncrement(h_small, sqrt(h_small), Wi) for Wi in eachcol(W)]
 args = (p.u0, p.tmax, p.saveat)
 sol_an = map(dWi -> solve(SAO(p), EulerMaruyama(p.dt), dWi, args...), dW);
 
 # %%
 _SETDEulerMaruyama(h) = SETDEulerMaruyama(h, -p.Γ)
-_SETD1(h) = SETD1(h, -p.Γ)
 cvg = (
     em = convergence(SAO(p), EulerMaruyama, p, h_cvg, t, W, sol_an),
     etdem = convergence(SAO_SETD(p), _SETDEulerMaruyama, p, h_cvg, t, W, sol_an)
 );
 
 # %%
-p = (nens = 300000, p_rest...)
+p = (nens = 100000, p_rest...)
 _SETD1(h) = SETD1(h, -p.Γ)
-weak_cvg = (; etd1 = weak_convergence(SAO_SETD(p), EulerMaruyama, p, h_cvg));
+_SETD2(h) = SETD2(h, -p.Γ)
+weak_cvg = (;
+    etd1 = weak_convergence(SAO_SETD(p), SAO(p), _SETD1, p, h_cvg),
+);
 
 # %%
 fig, axes = figax(nx = 2, ny = 1, xscale = log2, s = 130, yscale = log2, xlabel = L"h")
@@ -159,6 +161,25 @@ end
 axislegend.(axes, position = :rb)
 resize_to_layout!(fig)
 save("figs/SAO_convergence.pdf", fig)
+fig
+
+# %%
+p = (nens = 300000, p_rest...)
+_SETD1(h) = SETD1(h, -p.Γ)
+_SETD2(h) = SETD2(h, -p.Γ)
+h_cvg = @. 1 / 2^(4:9)
+weak_cvg = (;
+    # etd1 = weak_convergence(SAO_SETD(p), SAO(p), _SETD1, p, h_cvg),
+    etd2 = weak_convergence(SAO_SETD(p), SAO(p), _SETD2, p, h_cvg),
+);
+
+# %%
+fig, ax = figax(nx = 1, ny = 1, xscale = log2, s = 130, yscale = log2, xlabel = L"h")
+# plot_convergence(fig, ax, ax, weak_cvg.etd1; ignore_es = true, marker = :circle, label = "SETD1")
+plot_convergence(fig, ax, ax, weak_cvg.etd2; ignore_es = true, marker = :circle, label = "SETD2")
+lines!(ax, h_cvg, (@. 1 * h_cvg^1), linewidth = 3, color = :black)
+lines!(ax, h_cvg, (@. 1 * h_cvg^2), linewidth = 3, color = :black)
+axislegend(ax, position = :rb)
 fig
 
 # %% [markdown]
@@ -182,7 +203,7 @@ end
 # %%
 p_rest = (; u0 = 0.0, tmax = 250.0, nens = 5000, k = -5.0, D = 5.0, δ = 0.0, saveat = 0.1, save_after = 5.0);
 p = (; dt = 1.e-1, p_rest...)
-dW = [SampledWeinerIncrement(p.dt, p.tmax) for _ in 1:p.nens]
+dW = [SampledWienerIncrement(p.dt, p.tmax) for _ in 1:p.nens]
 args, kwargs = (p.u0, p.tmax, p.saveat), (; save_after = p.save_after)
 sol_em = map(dWi -> solve(OU(p), EulerMaruyama(p.dt), dWi, args...; kwargs...), dW);
 sol_et = map(dWi -> solve(OU_SETD(p), SETDEulerMaruyama(p.dt, p.k-p.δ), dWi, args...; kwargs...), dW);
@@ -268,7 +289,7 @@ var3 = (; m = Float64[], s = Float64[])
 
 @showprogress for dt in dt_var
     p = (; p_rest...)
-    dW = [SampledWeinerIncrement(dt, p.tmax) for _ in 1:p.nens]
+    dW = [SampledWienerIncrement(dt, p.tmax) for _ in 1:p.nens]
 
     sol = map(dWi -> solve(OU(p), EulerMaruyama(dt), dWi, p.u0, p.tmax, p.saveat), dW);
     varerr!(var1, sol)

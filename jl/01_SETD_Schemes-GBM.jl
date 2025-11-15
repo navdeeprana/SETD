@@ -50,7 +50,7 @@ gbm_analytical(p, t, W) = (; t, u = gbm_analytical.(p.u0, p.a, p.b, t, W))
 # %%
 p_rest = (u0 = 1.0, tmax = 2.0, a = 2.0, b = 1.0, nens = 1024, dt = 1/2^4)
 p = (δ = 0.5, p_rest...)
-dW = [SampledWeinerIncrement(p.dt, p.tmax) for _ in 1:p.nens]
+dW = [SampledWienerIncrement(p.dt, p.tmax) for _ in 1:p.nens]
 t = 0:p.dt:p.tmax
 W = map(dWi -> brownian_motion(dWi), dW);
 sol_an = map(Wi -> gbm_analytical(p, t, Wi), W);
@@ -210,7 +210,7 @@ fig, ax = figax(yscale = Makie.pseudolog10, xlabel = "t", ylabel = "Var[u(t)]")
 ax.limits = (nothing, nothing, -0.1, 2)
 for dt in [1.e-2, 1.e-1, 4.5e-1, 5.0e-1]
     p = (; dt = dt, p_rest...)
-    dW = [SampledWeinerIncrement(p.dt, p.tmax) for _ in 1:p.nens]
+    dW = [SampledWienerIncrement(p.dt, p.tmax) for _ in 1:p.nens]
     sol = map(dWi -> solve(GBM(p), EulerMaruyama(p.dt), dWi, p.u0, p.tmax, p.dt), dW);
     l = @sprintf "h=%.2f, Stable=%s" dt string(isEMstableforGBM(p, dt))
     lines!(ax, sol[1].t, var([s.u for s in sol]), label = l)
@@ -225,7 +225,7 @@ fig
 fig, ax = figax(yscale = Makie.pseudolog10)
 for dt in [1.e-2, 1.e-1, 4.5e-1, 5.0e-1]
     p = (; dt = dt, p_rest...)
-    dW = [SampledWeinerIncrement(p.dt, p.tmax) for _ in 1:p.nens]
+    dW = [SampledWienerIncrement(p.dt, p.tmax) for _ in 1:p.nens]
     sol = map(dWi -> solve(GBM_SETD(p), SETDEulerMaruyama(p.dt, p.a - p.δ), dWi, p.u0, p.tmax, p.dt), dW);
     lines!(ax, sol[1].t, var([s.u for s in sol]))
 end
