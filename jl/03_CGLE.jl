@@ -8,7 +8,7 @@
 #       format_version: '1.3'
 #       jupytext_version: 1.17.3
 #   kernelspec:
-#     display_name: julia 1.10.10
+#     display_name: Julia 1.10
 #     language: julia
 #     name: julia-1.10
 # ---
@@ -107,6 +107,11 @@ k = 0.02:0.1:1.0
 lines!(k, (@. 1.e-1/k^2), color = :black)
 text!(ax, L"$k^{-2}$"; position = (1.5e-1, 1.e+1), fontsize = 30)
 axislegend.(axes, position = :rt)
+
+texts = abc(axes)
+Label(fig[1, 1, TopLeft()], texts[1], fontsize = 30, padding = (0, 10, -30, 0), halign = :right)
+Label(fig[1, 2, TopLeft()], texts[2], fontsize = 30, padding = (0, 10, -30, 0), halign = :right)
+
 resize_to_layout!(fig)
 save("figs/CGLE_correlators.pdf", fig)
 fig

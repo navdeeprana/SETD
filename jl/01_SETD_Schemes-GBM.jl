@@ -8,7 +8,7 @@
 #       format_version: '1.3'
 #       jupytext_version: 1.17.3
 #   kernelspec:
-#     display_name: julia 1.10.10
+#     display_name: Julia 1.10
 #     language: julia
 #     name: julia-1.10
 # ---
@@ -109,6 +109,11 @@ _plot_rms_error!(ax, sol_eb, sol_an, label = "SETD-Milstein")
 axislegend(axes[1], position = :lb, nbanks = 3, labelsize = 28)
 axislegend(axes[2], position = :lb, nbanks = 3, labelsize = 28)
 axislegend(axes[3], position = :rb, nbanks = 2, labelsize = 28)
+
+for (i, t) in enumerate(abc(axes))
+    Label(fig[1, i, TopLeft()], t, fontsize = 30, padding = (0, -40, 10, 0), halign = :right)
+end
+
 resize_to_layout!(fig)
 save("figs/GBM_algorithm_comparison.pdf", fig)
 fig
@@ -308,5 +313,3 @@ Legend(fig[1, 3], [e2, e3, e4], ["SETD-EM", "SETD-Milstein", "SETD1"], L"$c=0.5\
 resize_to_layout!(fig)
 save("figs/GBM_stability.pdf", fig)
 fig
-
-# %%

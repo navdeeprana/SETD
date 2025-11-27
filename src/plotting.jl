@@ -67,3 +67,8 @@ function plot_boltzmann_distribution!(ax, pars, xm; kw...)
     P = P / sum(P * (x[2] - x[1]))
     lines!(ax, x, P; label = "Boltzmann", kw...)
 end
+
+function abc(axes)
+    alphabet = "abcdefghijklmnopqrstuvwxyz"
+    return [L"\textbf{(%$(l))}" for (_, l) in zip(axes, alphabet)]
+end
