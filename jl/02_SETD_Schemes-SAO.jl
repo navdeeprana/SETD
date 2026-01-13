@@ -49,23 +49,21 @@ function SAO_SETD(p)
 end
 
 # %%
-p_rest = (; u0 = 0.0, tmax = 20.0, nens = 10000, T = 6.0, Γ = 5.0, b = 1.e-2, z = 3, saveat = 0.2, save_after = 2.0);
+p_rest = (; u0 = 0.0, tmax = 20.0, nens = 50000, T = 6.0, Γ = 5.0, b = 1.e-2, z = 3, saveat = 0.2, save_after = 2.0);
 
 # %%
-p = (; dt = 2.e-1, p_rest...)
-dW = [SampledWienerIncrement(p.dt, p.tmax) for _ in 1:p.nens]
-args, kwargs = (p.u0, p.tmax, p.saveat), (; save_after = p.save_after)
-sol_em1 = map(dWi -> solve(SAO(p), EulerMaruyama(p.dt), dWi, args...; kwargs...), dW);
-sol_et1 = map(dWi -> solve(SAO_SETD(p), SETDEulerMaruyama(p.dt, -p.Γ, 0.5), dWi, args...; kwargs...), dW);
-sol_ex1 = map(dWi -> solve(SAO_SETD(p), SETD1(p.dt, -p.Γ), dWi, args...; kwargs...), dW);
-
-# %%
-p = (; dt = 1.e-2, p_rest...)
-dW = [SampledWienerIncrement(p.dt, p.tmax) for _ in 1:p.nens]
-args, kwargs = (p.u0, p.tmax, p.saveat), (; save_after = p.save_after)
-sol_em2 = map(dWi -> solve(SAO(p), EulerMaruyama(p.dt), dWi, args...; kwargs...), dW);
-sol_et2 = map(dWi -> solve(SAO_SETD(p), SETDEulerMaruyama(p.dt, -p.Γ, 0.5), dWi, args...; kwargs...), dW);
-sol_ex2 = map(dWi -> solve(SAO_SETD(p), SETD1(p.dt, -p.Γ), dWi, args...; kwargs...), dW);
+h_scan = [1.e-2, 2.e-2, 5.e-2, 1.e-1, 2.e-1]
+data = Dict()
+for (nh, h) in enumerate(h_scan)
+    p = (; dt = h, p_rest...)
+    dW = [SampledWienerIncrement(p.dt, p.tmax) for _ in 1:p.nens]
+    args, kwargs = (p.u0, p.tmax, p.saveat), (; save_after = p.save_after)
+    data[nh] = (;
+        em = map(dWi -> solve(SAO(p), EulerMaruyama(p.dt), dWi, args...; kwargs...), dW),
+        et = map(dWi -> solve(SAO_SETD(p), SETDEulerMaruyama(p.dt, -p.Γ, 0.5), dWi, args...; kwargs...), dW),
+        ex = map(dWi -> solve(SAO_SETD(p), SETD1(p.dt, -p.Γ), dWi, args...; kwargs...), dW),
+    )
+end
 
 # %%
 using OnlineStats, StatsBase, LinearAlgebra
@@ -84,32 +82,61 @@ fig, axes = figax(nx = 3, xlabel = L"$u$", limits = (-9, 9, -0.01, 0.23), xticks
 axes[1].ylabel = L"$P(u)$"
 
 axes[1].title = ("EM")
-P = probability_distribution(sol_em1)
+P = probability_distribution(data[5].em)
 lines!(axes[1], P.x, P.P; linewidth = 5, label = "h=0.2")
-P = probability_distribution(sol_em2)
+P = probability_distribution(data[1].em)
 lines!(axes[1], P.x, P.P; linewidth = 5, label = "h=0.01")
 
 axes[2].title = ("SETD-EM")
 axes[2].yticklabelsvisible = false
-P = probability_distribution(sol_et1)
+P = probability_distribution(data[5].et)
 lines!(axes[2], P.x, P.P; linewidth = 5, label = "h=0.2")
-P = probability_distribution(sol_et2)
+P = probability_distribution(data[1].et)
 lines!(axes[2], P.x, P.P; linewidth = 5, label = "h=0.01")
 
 axes[3].title = ("SETD1")
 axes[3].yticklabelsvisible = false
-P = probability_distribution(sol_ex1)
+P = probability_distribution(data[5].ex)
 lines!(axes[3], P.x, P.P; linewidth = 5, label = "h=0.2")
-P = probability_distribution(sol_ex2)
+P = probability_distribution(data[1].ex)
 lines!(axes[3], P.x, P.P; linewidth = 5, label = "h=0.01")
 
 for ax in axes
-    plot_boltzmann_distribution!(ax, p, 9.0; color = :black, linewidth = 3, linestyle = :dash)
+    plot_boltzmann_distribution!(ax, p_rest, 9.0; color = :black, linewidth = 3, linestyle = :dash)
 end
 
 axislegend.(axes; patchsize = (35, 20))
 resize_to_layout!(fig)
 save("figs/SAO_probability.pdf", fig)
+fig
+
+# %%
+function error_in_distribution(sol, pars)
+    P = probability_distribution(sol)
+    B = boltzmann_distribution(P.x, pars)
+    dP = @. P.P - B
+    rmse = sqrt(mean(dP.^2))
+    return dP, rmse
+end
+
+kw = (markersize = 25, linestyle = :dash, linewidth = 3)
+
+fig, ax = figax(xscale=log10, yscale=log10, xlabel=L"h")
+sols = [data[n].em for n in 1:5]
+rmse = [error_in_distribution(sol, p_rest)[2] for sol in sols]
+scatterlines!(ax, h_scan, rmse; kw..., label="EM")
+
+sols = [data[n].et for n in 1:5]
+rmse = [error_in_distribution(sol, p_rest)[2] for sol in sols]
+scatterlines!(ax, h_scan, rmse; kw..., label="SETD-EM")
+
+sols = [data[n].ex for n in 1:5]
+rmse = [error_in_distribution(sol, p_rest)[2] for sol in sols]
+scatterlines!(ax, h_scan, rmse; kw..., label="SETD1")
+
+ax.title="RMS error for the probability distribution"
+axislegend(ax, position=:lt)
+
 fig
 
 # %% [markdown]

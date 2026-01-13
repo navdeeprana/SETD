@@ -61,10 +61,15 @@ function plot_normal_distribution!(ax, xm; μ = 0.0, σ = 1.0, kw...)
     lines!(ax, x, P; label = "Normal", kw...)
 end
 
-function plot_boltzmann_distribution!(ax, pars, xm; kw...)
-    x = LinRange(-xm, xm, 1000)
+function boltzmann_distribution(x, pars)
     P = @. exp(-(x^2 / 2 + pars.b * x^4 / 4) / pars.T)
     P = P / sum(P * (x[2] - x[1]))
+    return P
+end
+
+function plot_boltzmann_distribution!(ax, pars, xm; kw...)
+    x = LinRange(-xm, xm, 1000)
+    P = boltzmann_distribution(x, pars)
     lines!(ax, x, P; label = "Boltzmann", kw...)
 end
 
