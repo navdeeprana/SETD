@@ -6,7 +6,7 @@
 #       extension: .jl
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.17.3
+#       jupytext_version: 1.19.1
 #   kernelspec:
 #     display_name: Julia 1.10
 #     language: julia
@@ -25,6 +25,7 @@ includet("src/plotting.jl")
 includet("src/brownian.jl")
 includet("src/sde_examples.jl")
 includet("src/solve.jl")
+includet("src/utils.jl")
 colors = Makie.wong_colors();
 set_theme!(makietheme())
 CairoMakie.enable_only_mime!("html")
@@ -48,7 +49,7 @@ end
 gbm_analytical(p, t, W) = (; t, u = gbm_analytical.(p.u0, p.a, p.b, t, W))
 
 # %%
-p_rest = (u0 = 1.0, tmax = 2.0, a = 2.0, b = 1.0, nens = 1024, dt = 1/2^4)
+p_rest = (u0 = 1.0, tmax = 2.0, a = 2.0, b = 1.0, nens = 1024, dt = 1 / 2^4)
 p = (δ = 0.5, p_rest...)
 dW = [SampledWienerIncrement(p.dt, p.tmax) for _ in 1:p.nens]
 t = 0:p.dt:p.tmax
@@ -62,45 +63,27 @@ sol_ea = map(dWi -> solve(GBM_SETD(p), SETDEulerMaruyama(p.dt, p.a - p.δ), dWi,
 sol_eb = map(dWi -> solve(GBM_SETD(p), SETDMilstein(p.dt, p.a - p.δ), dWi, p.u0, p.tmax, p.dt), dW);
 
 # %%
-function trajectory_rms_error(sol, sol_an)
-    dx2 = zero(sol[1].u)
-    for (sa, sb) in zip(sol, sol_an)
-        @. dx2 = dx2 + (sa.u - sb.u)^2
-    end
-    return sqrt.(dx2 ./ length(sol))
-end
-function _plot_sol!(ax, sol, n; kwargs...)
-    lines!(ax, sol[n].t, sol[n].u; linewidth = 4, kwargs...)
-    nothing
-end
-function _plot_rms_error!(ax, sol, sol_an; kwargs...)
-    dx2 = trajectory_rms_error(sol, sol_an)
-    lines!(ax, sol[1].t, dx2; kwargs...)
-    nothing
-end
-
-# %%
-n=10
+n = 10
 fig, axes = figax(nx = 3, xlabel = L"t", xticks = 0:1:2)
 axes[2].yticklabelsvisible = false
 ax = axes[1]
-ax.title="GBM trajectories"
-ax.ylabel=L"u(t)"
+ax.title = "GBM trajectories"
+ax.ylabel = L"u(t)"
 _plot_sol!(ax, sol_em, n; color = colors[1], label = "EM")
 _plot_sol!(ax, sol_ml, n; color = colors[2], label = "Milstein")
 _plot_sol!(ax, sol_an, n; color = (:black, 0.7), label = "Analytical")
 
 ax = axes[2]
-ax.title="GBM trajectories"
+ax.title = "GBM trajectories"
 _plot_sol!(ax, sol_ea, n; color = colors[3], label = "SETD-EM")
 _plot_sol!(ax, sol_eb, n; color = colors[4], label = "SETD-Milstein")
 _plot_sol!(ax, sol_an, n; color = (:black, 0.7), label = "Analytical")
 
 ax = axes[3]
-ax.limits = (nothing, nothing, 1.e-2, 1.e+2)
+ax.limits = (nothing, nothing, 1.0e-2, 1.0e+2)
 ax.yscale = log10
-ax.title="RMS error with time"
-ax.ylabel=L"\Delta(t)"
+ax.title = "RMS error with time"
+ax.ylabel = L"\Delta(t)"
 _plot_rms_error!(ax, sol_em, sol_an, label = "EM")
 _plot_rms_error!(ax, sol_ml, sol_an, label = "Milstein")
 _plot_rms_error!(ax, sol_ea, sol_an, label = "SETD-EM")
@@ -134,7 +117,7 @@ fig
 # # Convergence for the GBM
 
 # %%
-p_rest = (u0 = 1.0, tmax = 1.0, a = 2.0, b = 1.0, nens = 50000, saveat = 1/2^1)
+p_rest = (u0 = 1.0, tmax = 1.0, a = 2.0, b = 1.0, nens = 50000, saveat = 1 / 2^1)
 p = (δ = 0.5, p_rest...)
 h_cvg = @. 1 / 2^(5:10)
 t, W = brownian_motion(minimum(h_cvg), p.tmax, p.nens);
@@ -142,22 +125,22 @@ tn, Wn = tnWn(t, W, p.saveat)
 sol_an = map(Wni -> gbm_analytical(p, tn, Wni), eachcol(Wn));
 
 # %%
-_SETDEulerMaruyama(h) = SETDEulerMaruyama(h, p.a-p.δ)
-_SETDMilstein(h) = SETDMilstein(h, p.a-p.δ)
+_SETDEulerMaruyama(h) = SETDEulerMaruyama(h, p.a - p.δ)
+_SETDMilstein(h) = SETDMilstein(h, p.a - p.δ)
 cvg1 = (
     # em = convergence(GBM(p), EulerMaruyama, p, h_cvg, t, W, sol_an)
     # ml = convergence(GBM(p), Milstein, p, h_cvg, t, W, sol_an)
     etdem = convergence(GBM_SETD(p), _SETDEulerMaruyama, p, h_cvg, t, W, sol_an),
-    etdml = convergence(GBM_SETD(p), _SETDMilstein, p, h_cvg, t, W, sol_an)
+    etdml = convergence(GBM_SETD(p), _SETDMilstein, p, h_cvg, t, W, sol_an),
 );
 
 # %%
 p = (δ = 1.0, p_rest...)
-_SETDEulerMaruyama(h) = SETDEulerMaruyama(h, p.a-p.δ)
-_SETDMilstein(h) = SETDMilstein(h, p.a-p.δ)
+_SETDEulerMaruyama(h) = SETDEulerMaruyama(h, p.a - p.δ)
+_SETDMilstein(h) = SETDMilstein(h, p.a - p.δ)
 cvg2 = (
     etdem = convergence(GBM_SETD(p), _SETDEulerMaruyama, p, h_cvg, t, W, sol_an),
-    etdml = convergence(GBM_SETD(p), _SETDMilstein, p, h_cvg, t, W, sol_an)
+    etdml = convergence(GBM_SETD(p), _SETDMilstein, p, h_cvg, t, W, sol_an),
 );
 
 # %%
@@ -176,8 +159,8 @@ plot_convergence(fig, axes[3], axes[4], cvg1.etdml, marker = :circle, label = L"
 plot_convergence(fig, axes[3], axes[4], cvg2.etdml, marker = :rect, label = L"\delta = 1.0")
 for (ax, a, n, text, yf) in zip(axes, [3, 2.5, 5, 2.5], [0.5, 1.0, 1.0, 1.0], [L"h^{1/2}", L"h", L"h", L"h"], [0.75, 0.55, 0.55, 0.55])
     lines!(ax, h_cvg, (@. a * h_cvg^n), linewidth = 3, color = :black)
-    x = (h_cvg[3] + h_cvg[4])/2
-    text!(ax, x, yf*a*(x^n); text, fontsize = 30)
+    x = (h_cvg[3] + h_cvg[4]) / 2
+    text!(ax, x, yf * a * (x^n); text, fontsize = 30)
 end
 axislegend.(axes, position = :rb)
 resize_to_layout!(fig)
@@ -188,7 +171,7 @@ fig
 # # Stability
 
 # %%
-dt = 1.e-2
+dt = 1.0e-2
 p_rest = (u0 = 1.0, tmax = 3.0, a = -3.0, b = sqrt(2.0), δ = 0.5, nens = 10000)
 p = (; dt = dt, p_rest...)
 t, W = brownian_motion(dt, p.tmax, p.nens);
@@ -202,21 +185,21 @@ lines!(ax, t, var(uan))
 fig
 
 # %%
-isGBMstable(p, h) = p.a + 0.5*p.b^2 < 0
-isEMstableforGBM(p, h) = abs(1+h*p.a)^2 + h*abs(p.b)^2 < 1
+isGBMstable(p, h) = p.a + 0.5 * p.b^2 < 0
+isEMstableforGBM(p, h) = abs(1 + h * p.a)^2 + h * abs(p.b)^2 < 1
 function isSETDEMstableforGBM(p, h)
     (; a, b, δ) = p
     c = a - δ
-    return (exp(c*h) + (δ/c)*(exp(c*h)-1))^2 + h*(b*exp(c*h))^2 < 1
+    return (exp(c * h) + (δ / c) * (exp(c * h) - 1))^2 + h * (b * exp(c * h))^2 < 1
 end
 
 # %%
 fig, ax = figax(yscale = Makie.pseudolog10, xlabel = "t", ylabel = "Var[u(t)]")
 ax.limits = (nothing, nothing, -0.1, 2)
-for dt in [1.e-2, 1.e-1, 4.5e-1, 5.0e-1]
+for dt in [1.0e-2, 1.0e-1, 4.5e-1, 5.0e-1]
     p = (; dt = dt, p_rest...)
     dW = [SampledWienerIncrement(p.dt, p.tmax) for _ in 1:p.nens]
-    sol = map(dWi -> solve(GBM(p), EulerMaruyama(p.dt), dWi, p.u0, p.tmax, p.dt), dW);
+    sol = map(dWi -> solve(GBM(p), EulerMaruyama(p.dt), dWi, p.u0, p.tmax, p.dt), dW)
     l = @sprintf "h=%.2f, Stable=%s" dt string(isEMstableforGBM(p, dt))
     lines!(ax, sol[1].t, var([s.u for s in sol]), label = l)
 end
@@ -228,10 +211,10 @@ fig
 
 # %%
 fig, ax = figax(yscale = Makie.pseudolog10)
-for dt in [1.e-2, 1.e-1, 4.5e-1, 5.0e-1]
+for dt in [1.0e-2, 1.0e-1, 4.5e-1, 5.0e-1]
     p = (; dt = dt, p_rest...)
     dW = [SampledWienerIncrement(p.dt, p.tmax) for _ in 1:p.nens]
-    sol = map(dWi -> solve(GBM_SETD(p), SETDEulerMaruyama(p.dt, p.a - p.δ), dWi, p.u0, p.tmax, p.dt), dW);
+    sol = map(dWi -> solve(GBM_SETD(p), SETDEulerMaruyama(p.dt, p.a - p.δ), dWi, p.u0, p.tmax, p.dt), dW)
     lines!(ax, sol[1].t, var([s.u for s in sol]))
 end
 t = 0.0:0.01:p_rest.tmax
@@ -240,17 +223,17 @@ lines!(ax, t, uvar, color = :black)
 fig
 
 # %%
-stability_GBM(x, y, p) = @. 1+x+y/2
-stability_EM(x, y, p) = @. (1+x)^2 + y
-stability_Milstein(x, y, p) = @. (1+x)^2 + y + y^2/2
+stability_GBM(x, y, p) = @. 1 + x + y / 2
+stability_EM(x, y, p) = @. (1 + x)^2 + y
+stability_Milstein(x, y, p) = @. (1 + x)^2 + y + y^2 / 2
 
 function stability_terms(x, y, p)
     z = p.z
-    c, δ = z * p.a, (1-z) * p.a
-    t1 = @. ((z-1+exp(z*x))^2)/z^2
-    t2 = @. y * exp(z*x)
-    t3 = @. y^2 * exp(z*x)/2
-    t4 = @. (exp(2*z*x)-1)*(y/(2*z*x))
+    c, δ = z * p.a, (1 - z) * p.a
+    t1 = @. ((z - 1 + exp(z * x))^2) / z^2
+    t2 = @. y * exp(z * x)
+    t3 = @. y^2 * exp(z * x) / 2
+    t4 = @. (exp(2 * z * x) - 1) * (y / (2 * z * x))
     return t1, t2, t3, t4
 end
 
@@ -274,14 +257,14 @@ function stability_region_plot!(ax, f, x, y, p, color; alpha = 0.1, kw...)
     F = f(x, y', p)
     Z = @. F < 1
     contour!(ax, x, y, F, levels = [1]; linewidth = 5, color, kw...)
-    contourf!(ax, x, y, Z; colormap = [:transparent, (color, alpha)])
+    return contourf!(ax, x, y, Z; colormap = [:transparent, (color, alpha)])
 end
 
 # %%
 fig, axes = figax(nx = 3, ny = 1, xlabel = L"$\lambda h$", xticks = -5:1:1, yticks = 0:2:6)
 axes[1].ylabel = L"$\mu^2 h$"
-axes[2].yticklabelsvisible=false
-axes[3].yticklabelsvisible=false
+axes[2].yticklabelsvisible = false
+axes[3].yticklabelsvisible = false
 
 x = -6:0.05:1.0
 y = 0:0.05:7
