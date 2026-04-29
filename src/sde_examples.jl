@@ -8,11 +8,11 @@ function linearsde_analytical!(x, x0, a, b, c, t, W)
     x[1] = x0
     ito = 0.0
     for i in 2:length(W)
-        at = a*t[i]
-        ito = ito + exp(-at) * (W[i] - W[i-1])
-        x[i] = exp(at) * (x0 + (b/a) * (1 - exp(-at)) + c * ito)
+        at = a * t[i]
+        ito = ito + exp(-at) * (W[i] - W[i - 1])
+        x[i] = exp(at) * (x0 + (b / a) * (1 - exp(-at)) + c * ito)
     end
-    nothing
+    return nothing
 end
 
 function linearsde_analytical(x0, a, b, c, t, W)
@@ -32,4 +32,4 @@ OU_analytical(x0, k, D, t, W) = linearsde_analytical(x0, -k, 0, sqrt(2D), t, W)
 gbm_analytical(x0, a, b, t, W) = x0 * exp((a - b^2 / 2) * t + b * W)
 gbm_analytical(a, b, t, W) = gbm_analytical(1, a, b, t, W)
 
-gbm_var(x0, a, b, t) = x0^2*exp(2*a*t)*(exp(b^2*t)-1)
+gbm_var(x0, a, b, t) = x0^2 * exp(2 * a * t) * (exp(b^2 * t) - 1)
