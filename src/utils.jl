@@ -1,3 +1,10 @@
+function addto!(nt::NamedTuple, vals::Tuple)
+    for (v, x) in zip(values(nt), vals)
+        push!(v, x)
+    end
+    return
+end
+
 function probability_distribution(sol; bins = -9:0.2:9)
     h = OnlineStats.Hist(bins)
     for si in sol

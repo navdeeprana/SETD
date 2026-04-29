@@ -14,7 +14,7 @@ function makietheme()
             yminorticksvisible = true,
             xminortickalign = 1,
             yminortickalign = 1,
-            titlefont = :regular
+            titlefont = :regular,
         ),
         Lines = (linewidth = 3.0,),
         Scatter = (markersize = 20,)
@@ -37,17 +37,17 @@ end
 
 function errorscatter!(ax, x, y, dy; kw...)
     p = scatter!(ax, x, y; kw...)
-    errorbars!(ax, x, y, dy; color = p.color, whiskerwidth = 0.5*to_value(p.markersize)[1])
+    errorbars!(ax, x, y, dy; color = p.color, whiskerwidth = 0.5 * to_value(p.markersize)[1])
 end
 
 function plot_convergence(fig, ax1, ax2, cvg; ignore_es = false, kwargs...)
-    g = groupby(cvg, :t)[end]
-    (; h, es, ew) = g
+    idx = cvg.t .== last(unique(cvg.t))
+    h, es, ew = cvg.h[idx], cvg.es[idx], cvg.ew[idx]
     kw = (markersize = 25, linestyle = :dash, linewidth = 3)
     if !ignore_es
         scatterlines!(ax1, h, es; kw..., kwargs...)
     end
-    scatterlines!(ax2, h, ew; kw..., kwargs...)
+    return scatterlines!(ax2, h, ew; kw..., kwargs...)
 end
 
 # General power law
@@ -57,20 +57,24 @@ plot_probability_distribution!(ax, X; bins = 256, kw...) = stephist!(ax, X; norm
 
 function plot_normal_distribution!(ax, xm; μ = 0.0, σ = 1.0, kw...)
     x = LinRange(-xm, xm, 1000)
-    P = @. exp(-((x-μ)^2 / (2*σ^2))) / sqrt(2π*σ^2)
-    lines!(ax, x, P; label = "Normal", kw...)
-end
-
-function boltzmann_distribution(x, pars)
-    P = @. exp(-(x^2 / 2 + pars.b * x^4 / 4) / pars.T)
-    P = P / sum(P * (x[2] - x[1]))
-    return P
+    P = @. exp(-((x - μ)^2 / (2 * σ^2))) / sqrt(2π * σ^2)
+    return lines!(ax, x, P; label = "Normal", kw...)
 end
 
 function plot_boltzmann_distribution!(ax, pars, xm; kw...)
     x = LinRange(-xm, xm, 1000)
     P = boltzmann_distribution(x, pars)
-    lines!(ax, x, P; label = "Boltzmann", kw...)
+    return lines!(ax, x, P; label = "Boltzmann", kw...)
+end
+
+function _plot_sol!(ax, sol, n; kwargs...)
+    lines!(ax, sol[n].t, sol[n].u; linewidth = 4, kwargs...)
+    return nothing
+end
+function _plot_rms_error!(ax, sol, sol_an; kwargs...)
+    dx2 = trajectory_rms_error(sol, sol_an)
+    lines!(ax, sol[1].t, dx2; kwargs...)
+    return nothing
 end
 
 function abc(axes)
