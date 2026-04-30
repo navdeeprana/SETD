@@ -1,12 +1,18 @@
 function resetdW!(dW::ComputedWienerIncrement, t, W, h)
     tn, Wn = coarsegrain(t, W, h)
-    return @. dW.W = Wn
+    @. dW.W = Wn
+    return nothing
 end
 
 function resetdW!(dW::SO15WienerIncrement, t, W, h)
     tn, Wn = coarsegrain(t, W, h)
-    @views @. dW.dW = Wn[2:end] - Wn[1:(end - 1)]
-    return integral_I10!(dW.I10, t, W, h)
+    # Unroll the loop because the @views below allocate
+    # @views @. dW.dW = Wn[2:end] - Wn[1:(end - 1)]
+    @inbounds for i in eachindex(dW.dW)
+        dW.dW[i] = Wn[i+1] - Wn[i]
+    end
+    integral_I10!(dW.I10, t, W, h)
+    return nothing
 end
 
 function wiener_increment_for_convergence(::AbstractNumericalMethod, h, tmax)
@@ -46,12 +52,14 @@ end
 # To reduce the variance, we use Antithetic variates, which allows for smaller ensemble size.
 
 function antithesis!(dW::SampledWienerIncrement, sign, sqrth)
-    return @. dW.dW = sign * dW.dW
+    @. dW.dW = sign * dW.dW
+    return nothing
 end
 
 function antithesis!(dW::SO15WienerIncrement, sign, sqrth)
     @. dW.dW = sign * dW.dW
-    return @. dW.I10 = sign * dW.I10
+    @. dW.I10 = sign * dW.I10
+    return nothing
 end
 
 function solve_for_weak_convergence(sde, int, dW, p; ϕ = identity)

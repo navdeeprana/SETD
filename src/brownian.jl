@@ -1,6 +1,7 @@
 function wiener_increment!(dW, s)
     randn!(dW)
-    return @. dW *= s
+    @. dW *= s
+    return nothing
 end
 
 function wiener_increment(N, s)
@@ -65,7 +66,8 @@ end
 
 function forced_statistics!(Z, μ, σ)
     μc, σc = mean(Z), std(Z)
-    return @. Z = (σ / σc) * (Z - μc) + μ
+    @. Z = (σ / σc) * (Z - μc) + μ
+    return nothing
 end
 
 struct SampledWienerIncrement{T, V} <: AbstractWienerIncrement
@@ -86,9 +88,10 @@ end
 
 function redraw!(dW::SampledWienerIncrement; force_statistics = false)
     wiener_increment!(dW.dW, dW.sqrth)
-    return if force_statistics
+    if force_statistics
         forced_statistics!(dW.dW, 0.0, dW.sqrth)
     end
+    return nothing
 end
 
 mutable struct SO15WienerIncrement{T, V1, V2} <: AbstractWienerIncrement
@@ -111,7 +114,8 @@ function redraw!(dW::SO15WienerIncrement)
     (; h, dW, I10) = dW
     wiener_increment!(dW, h)
     randn!(I10)
-    return @. I10 = 0.5 * h^(3 / 2) * (dW + I10 / sqrt(3))
+    @. I10 = 0.5 * h^(3 / 2) * (dW + I10 / sqrt(3))
+    return nothing
 end
 
 Base.getindex(dW::SampledWienerIncrement, i) = dW.dW[i]
@@ -128,7 +132,7 @@ brownian_motion(args...; kwargs...) = wiener_process(args...; kwargs...)
 function integral_I10!(I10, t, W, hcoarse)
     skip = (length(t) - 1) ÷ round(Int, t[end] / hcoarse)
     δ = t[2] - t[1]
-    return @inbounds for n in 1:length(I10)
+    @inbounds for n in 1:length(I10)
         i = (n - 1) * skip + 1
         W0 = W[i]
         s = 0.0
@@ -137,6 +141,7 @@ function integral_I10!(I10, t, W, hcoarse)
         end
         I10[n] = δ * s
     end
+    return nothing
 end
 
 function integral_I10(t, W, hcoarse)
