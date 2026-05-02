@@ -41,8 +41,7 @@ function errorscatter!(ax, x, y, dy; kw...)
 end
 
 function plot_convergence(fig, ax1, ax2, cvg; ignore_es = false, kwargs...)
-    idx = cvg.t .== last(unique(cvg.t))
-    h, es, ew = cvg.h[idx], cvg.es[idx], cvg.ew[idx]
+    (; h, es, ew) = cvg
     kw = (markersize = 25, linestyle = :dash, linewidth = 3)
     if !ignore_es
         scatterlines!(ax1, h, es; kw..., kwargs...)

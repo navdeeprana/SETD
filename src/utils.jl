@@ -28,3 +28,11 @@ function trajectory_rms_error(sol, sol_an)
     end
     return sqrt.(dx2 ./ length(sol))
 end
+
+macro find_globals(ex)
+    :(let low = @code_lowered($ex)
+        walker(x) = if x isa GlobalRef && !isconst(x); println(x) end
+        MacroTools.postwalk.(Ref(walker), low.code)
+        nothing
+    end)
+end
