@@ -104,15 +104,15 @@ end
 
 function SO15WienerIncrement(h::T, tmax::T) where {T}
     N = round(Int, tmax / h)
-    dW = wiener_increment(N, h)
+    dW = wiener_increment(N, sqrt(h))
     I10 = randn(T, N)
     @. I10 = 0.5 * h^(3 / 2) * (dW + I10 / sqrt(3))
     return SO15WienerIncrement(h, dW, I10)
 end
 
 function redraw!(dW::SO15WienerIncrement)
-    (; h, dW, I10) = dW
-    wiener_increment!(dW, h)
+    (; h, sqrth, dW, I10) = dW
+    wiener_increment!(dW, sqrth)
     randn!(I10)
     @. I10 = 0.5 * h^(3 / 2) * (dW + I10 / sqrt(3))
     return nothing
