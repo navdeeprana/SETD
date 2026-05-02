@@ -70,22 +70,40 @@ end
 # Since these integrators operate on Wiener increments, and not directly on the random
 # numbers, we need to scale the stochastic integral by sqrt(h). Technically SETD1 should
 # only operate on InstantWienerIncrement, but we leave it this way.
-function SETD1(h, c)
-    fac = (
-        exp(c * h),
-        expm1(c * h) / c,
-        sqrt(expm1(2 * c * h) / (2c)) / sqrt(h),
-    )
+
+function setd1_factors(h, c; threshold = 1.e-5)
+    f1 = exp(h * c)
+    if (abs(h * c) <= threshold)
+        f2 = h + 0.5e0 * c * h^2
+        f3 = 1.0 + 0.5e0 * c * h
+    else
+        f2 = expm1(c * h) / c
+        f3 = sqrt(expm1(2 * c * h) / (2c)) / sqrt(h)
+    end
+    return f1, f2, f3
+end
+
+function SETD1(h, c; threshold = 1.e-5)
+    fac = setd1_factors(h, c; threshold)
     return Integrator(SETD1(), (; h, c, fac))
 end
 
-function SETD2(h, c)
-    fac = (
-        exp(c * h),
-        ((1 + c * h) * expm1(c * h) - c * h) / (c^2 * h),
-        -(expm1(c * h) - c * h) / (c^2 * h),
-        sqrt(expm1(2 * h * c) / (2c)) / sqrt(h),
-    )
+function setd2_factors(h, c; threshold = 1.e-5)
+    f1 = exp(h * c)
+    if (abs(h * c) <= threshold)
+        f2 = 1.5e0 * h + (2.e0 / 3.e0) * c * h^2
+        f3 = -0.5e0 * h - (1.e0 / 6.e0) * c * h^2
+        f4 = 1.0 + 0.5e0 * c * h
+    else
+        f2 = ((1 + c * h) * expm1(c * h) - c * h) / (c^2 * h)
+        f3 = -(expm1(c * h) - c * h) / (c^2 * h)
+        f4 = sqrt(expm1(2 * h * c) / (2c)) / sqrt(h)
+    end
+    return f1, f2, f3, f4
+end
+
+function SETD2(h, c; threshold = 1.e-5)
+    fac = setd2_factors(h, c; threshold)
     return Integrator(SETD2(true, 0.0), (; h, c, fac))
 end
 
@@ -189,9 +207,9 @@ end
 function stepforward(int::SETD2, q, s::AbstractSDE, u0, dW)
     fnow = s.f(u0, s.p)
     if int.first_step
-        c, h = q.c, q.h
-        fac = (exp(c * h), expm1(c * h) / c, sqrt(expm1(2 * c * h) / (2c)) / sqrt(h))
-        un = fac[1] * u0 + fac[2] * fnow + q.fac[3] * s.g(u0, s.p) * dW
+        h, c = q.h, q.c
+        fac1 = setd1_factors(h, c)
+        un = fac1[1] * u0 + fac1[2] * fnow + fac1[3] * s.g(u0, s.p) * dW
         int.first_step = false
     else
         un = q.fac[1] * u0 + q.fac[2] * fnow + q.fac[3] * int.fprev + q.fac[4] * s.g(u0, s.p) * dW

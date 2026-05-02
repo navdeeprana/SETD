@@ -34,7 +34,7 @@ function convergence(sde, int_constructor, p, h_cvg, t, W, sol_an)
         for (Wi, sa) in zip(eachcol(W), sol_an)
             int = int_constructor(h)
             resetdW!(dW, t, Wi, h)
-            sol = solve(sde, int, dW, p.u0, p.tmax, p.saveat, save_after = 0.5 * p.saveat)
+            sol = solve(sde, int, dW, p.u0, p.tmax, p.saveat; save_after = p.save_after)
             u_an = sa.u
             for (n, tn) in enumerate(t_an)
                 fit!(os[n], (abs(sol.u[n] - u_an[n]), sol.u[n], u_an[n]))
