@@ -34,7 +34,7 @@ function convergence(sde, int_constructor, p, h_cvg, t, W, sol_an)
         for (Wi, sa) in zip(eachcol(W), sol_an)
             int = int_constructor(h)
             resetdW!(dW, t, Wi, h)
-            sol = solve(sde, int, dW, p.u0, p.tmax, p.saveat; save_after = p.save_after)
+            sol = solve(sde, int, dW, p.u0, p.tmax, p.saveat, save_after = p.save_after)
             u_an = sa.u
             for (n, tn) in enumerate(t_an)
                 fit!(os[n], (abs(sol.u[n] - u_an[n]), sol.u[n], u_an[n]))
@@ -62,39 +62,40 @@ function antithesis!(dW::SO15WienerIncrement, sign, sqrth)
     return nothing
 end
 
-function solve_for_weak_convergence(sde, int, dW, p; ϕ = identity)
-    sqrth = sqrt(dW.h)
-    sol = solve(sde, int, dW, p.u0, p.tmax, p.saveat)
+function solve_for_weak_convergence(sde, int_constructor :: F, dW, p, h; ϕ = identity) where {F}
+    sqrth = sqrt(h)
+    sol = solve(sde, int_constructor(h), dW, p.u0, p.tmax, p.saveat, save_after = p.save_after)
 
-    os = [Mean() for _ in sol.t]
+    os = [OnlineStats.Series(Mean(), Variance()) for _ in sol.t]
 
     for _ in 1:p.nens
         redraw!(dW)
-        for sign in (1, -1)
-            antithesis!(dW, sign, sqrth)
-            sol = solve(sde, int, dW, p.u0, p.tmax, p.saveat, save_after = 0.5 * p.saveat)
-            for n in eachindex(sol.t)
-                fit!(os[n], ϕ(sol.u[n]))
-            end
+
+        int = int_constructor(h)
+        solp = solve(sde, int, dW, p.u0, p.tmax, p.saveat, save_after = p.save_after)
+
+        int = int_constructor(h)
+        antithesis!(dW, -1, sqrth)
+        solm = solve(sde, int, dW, p.u0, p.tmax, p.saveat, save_after = p.save_after)
+        for n in eachindex(solp.t)
+            fit!(os[n], 0.5 * (ϕ(solp.u[n]) + ϕ(solm.u[n])))
         end
     end
-    return sol.t, value.(os)
+    mean = [value(o.stats[1]) for o in os]
+    std = [sqrt(value(o.stats[2])) for o in os]
+    return (; sol.t, mean, std)
 end
 
-function weak_convergence(sde, sde_an, int_constructor, dW_constructor, p, h_cvg; scale = 32, ϕ = identity)
-    cvg = (; t = Float64[], h = Float64[], es = Float64[], ew = Float64[])
-
-    h_small = minimum(h_cvg) / scale
-    int = StrongOrder15(h_small)
-    dW = wiener_increment_for_convergence(int.m, h_small, p.tmax)
-    t_an, umean_an = solve_for_weak_convergence(sde_an, int, dW, p; ϕ)
+function weak_convergence(sde, int_constructor, dW_constructor, p, h_cvg, stats_an; scale = 32, ϕ = identity)
+    cvg = (; t = Float64[], h = Float64[], ew = Float64[], ewe = Float64[])
 
     @showprogress for h in h_cvg
-        int = int_constructor(h)
         dW = dW_constructor(h, p.tmax)
-        t, umean = solve_for_weak_convergence(sde, int, dW, p; ϕ)
-        for (n, tn) in enumerate(t)
-            addto!(cvg, (tn, h, 0.0, abs(umean[n] - umean_an[n])))
+        stats = solve_for_weak_convergence(sde, int_constructor, dW, p, h; ϕ)
+        for (n, tn) in enumerate(stats.t)
+            ew = abs(stats.mean[n] - stats_an.mean[n])
+            err = sqrt(stats.std[n]^2 + stats_an.std[n]^2)
+            addto!(cvg, (tn, h, ew, err))
         end
     end
     return cvg
