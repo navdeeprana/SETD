@@ -49,6 +49,15 @@ function plot_convergence(fig, ax1, ax2, cvg; ignore_es = false, kwargs...)
     return scatterlines!(ax2, h, ew; kw..., kwargs...)
 end
 
+function plot_weak_convergence(fig, ax, cvg; error = false, kwargs...)
+    h, ew, ewe = cvg.h, cvg.ew, cvg.ewe
+    kw = (markersize = 25, linestyle = :dash, linewidth = 3)
+    scatterlines!(ax, h, ew; kw..., kwargs...)
+    if error
+        rangebars!(ax, h, ew, ew .+ ewe)
+    end
+end
+
 # General power law
 power_law(x, x0, p, a) = @. a * (x / x0)^p
 
@@ -79,4 +88,8 @@ end
 function abc(axes)
     alphabet = "abcdefghijklmnopqrstuvwxyz"
     return [L"\textbf{(%$(l))}" for (_, l) in zip(axes, alphabet)]
+end
+
+function logticks(base, range)
+    return collect(float(base) .^ range), [L"{%$base}^{%$i}" for i in range]
 end

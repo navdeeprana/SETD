@@ -66,11 +66,11 @@ end
 
 function solve_for_weak_convergence(sde, int_constructor :: F, dW, p, h; ϕ = identity) where {F}
     sqrth = sqrt(h)
+    saveat, save_after = save_params_for_convergence(p)
     sol = solve(sde, int_constructor(h), dW, p.u0, p.tmax, saveat; save_after)
 
     os = OnlineStats.Series(Mean(), Variance())
 
-    saveat, save_after = save_params_for_convergence(p)
 
     for _ in 1:p.nens
         redraw!(dW)
