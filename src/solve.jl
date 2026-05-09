@@ -116,10 +116,9 @@ function IFEulerMaruyama(h, c)
     return Integrator(IFEulerMaruyama(), (; h, c, fac))
 end
 
-# Define a SDE du = f(u,p) + g(u,p) dW, where dg = ∂g/∂u.
-
 abstract type AbstractSDE end
 
+# Define a multiplicative SDE du = f(u,p) + g(u,p) dW, where dg = ∂g/∂u.
 struct MultiplicativeSDE{F, G, DG, P} <: AbstractSDE
     f::F
     g::G
@@ -127,11 +126,12 @@ struct MultiplicativeSDE{F, G, DG, P} <: AbstractSDE
     p::P
 end
 
-struct AdditiveSDE{F, DF, D2F, G, P} <: AbstractSDE
+# Define an additive SDE du = f(u,p) + σ dW, where df = ∂f/∂u and d2f = ∂^2f/∂u^2.
+struct AdditiveSDE{F, DF, D2F, S, P} <: AbstractSDE
     f::F
     df::DF
     d2f::D2F
-    g::G
+    σ::S
     p::P
 end
 
@@ -145,81 +145,98 @@ end
 
 stepforward(int::Integrator, s::AbstractSDE, u0, dW) = stepforward(int.m, int.q, s, u0, dW)
 
-function stepforward(::EulerMaruyama, q, s::AbstractSDE, u0, dW)
+# Methods for additive SDEs.
+
+function stepforward(::EulerMaruyama, q, s::AdditiveSDE, u0, dW)
+    return u0 + q.h * s.f(u0, s.p) + s.σ * dW
+end
+
+function stepforward(m::StrongOrder15, q, s::AdditiveSDE, u0, dW)
+    (; p, f, df, d2f, σ) = s
+    h, f0, df0, d2f0 = q.h, f(u0, p), df(u0, p), d2f(u0, p)
+    return (
+        u0 + h * f0 + σ * (dW[1] + df0 * dW[2])
+        + 0.5 * h^2 * (f0 * df0 + 0.5 * σ^2 * d2f0)
+    )
+end
+
+function stepforward(m::WeakOrder20, q, s::AdditiveSDE, u0, dW)
+    (; p, f, df, d2f, σ) = s
+    h, f0, df0, d2f0 = q.h, f(u0, p), df(u0, p), d2f(u0, p)
+    return (
+        u0 + h * f0 + σ * (1 + 0.5 * h * df0) * dW
+        + 0.5 * h^2 * (f0 * df0 + 0.5 * σ^2 * d2f0)
+    )
+end
+
+function stepforward(int::ABMaruyama, q, s::AdditiveSDE, u0, dW)
+    (; p, f, σ) = s
+    h, fnow = q.h, f(u0, p)
+    if int.first_step
+        un = u0 + h * fnow + σ * dW
+        int.first_step = false
+    else
+        un = u0 + h * (1.5 * fnow - 0.5 * int.fprev) + σ * dW
+    end
+    int.fprev = fnow
+    return un
+end
+
+# Methods for multiplicative SDEs
+
+function stepforward(::EulerMaruyama, q, s::MultiplicativeSDE, u0, dW)
     return u0 + q.h * s.f(u0, s.p) + s.g(u0, s.p) * dW
 end
 
-function stepforward(::Milstein, q, s::AbstractSDE, u0, dW)
+function stepforward(::Milstein, q, s::MultiplicativeSDE, u0, dW)
     return (
         u0 + q.h * s.f(u0, s.p)
-            + s.g(u0, s.p) * (dW + 0.5 * s.dg(u0, s.p) * (dW^2 - q.h))
+        + s.g(u0, s.p) * (dW + 0.5 * s.dg(u0, s.p) * (dW^2 - q.h))
     )
 end
 
-function stepforward(m::StrongOrder15, q, s::AbstractSDE, u0, dW)
-    (; p, f, df, d2f, g) = s
-    f0, df0, b0 = f(u0, p), df(u0, p), g(u0, p)
-    return (
-        u0 + q.h * f0
-            + b0 * dW[1] + b0 * df0 * dW[2]
-            + 0.5 * q.h^2 * (f0 * df0 + 0.5 * b0^2 * d2f(u0, p))
-    )
+# SETD Methods
+
+# SETD Methods for additive SDEs
+
+function stepforward(::SETD1, q, s::AdditiveSDE, u0, dW)
+    (; p, f, σ) = s
+    return q.fac[1] * u0 + q.fac[2] * f(u0, p) + q.fac[3] * σ * dW
 end
 
-function stepforward(m::WeakOrder20, q, s::AbstractSDE, u0, dW)
-    (; p, f, df, d2f, g) = s
-    f0, df0, b0 = f(u0, p), df(u0, p), g(u0, p)
-    return (
-        u0 + q.h * f0
-            + b0 * (1 + 0.5 * q.h * df0) * dW
-            + 0.5 * q.h^2 * (f0 * df0 + 0.5 * b0^2 * d2f(u0, p))
-    )
-end
-
-function stepforward(int::ABMaruyama, q, s::AbstractSDE, u0, dW)
-    fnow = s.f(u0, s.p)
+function stepforward(int::SETD2, q, s::AdditiveSDE, u0, dW)
+    (; p, f, σ) = s
+    fnow = f(u0, s.p)
     if int.first_step
-        un = u0 + q.h * fnow + s.g(u0, s.p) * dW
+        fac1 = setd1_factors(q.h, q.c)
+        un = fac1[1] * u0 + fac1[2] * fnow + fac1[3] * σ * dW
         int.first_step = false
     else
-        un = u0 + q.h * (1.5 * fnow - 0.5 * int.fprev) + s.g(u0, s.p) * dW
+        un = q.fac[1] * u0 + q.fac[2] * fnow + q.fac[3] * int.fprev + q.fac[4] * σ * dW
     end
     int.fprev = fnow
     return un
 end
 
-function stepforward(::SETDEulerMaruyama, q, s::AbstractSDE, u0, dW)
-    return q.fac[1] * u0 + q.fac[2] * s.f(u0, s.p) + q.fac[3] * s.g(u0, s.p) * dW
+function stepforward(::IFEulerMaruyama, q, s::AdditiveSDE, u0, dW)
+    (; p, f, σ) = s
+    return q.fac[1] * (u0 + q.h * f(u0, p)) + q.fac[2] * σ * dW
 end
 
-function stepforward(::SETDMilstein, q, s::AbstractSDE, u0, dW)
+# SETD Methods for multiplicative SDEs.
+
+function stepforward(::SETDEulerMaruyama, q, s::MultiplicativeSDE, u0, dW)
+    (; p, f, g) = s
+    return q.fac[1] * u0 + q.fac[2] * f(u0, p) + q.fac[3] * g(u0, p) * dW
+end
+
+function stepforward(::SETDMilstein, q, s::MultiplicativeSDE, u0, dW)
+    (; p, f, g, dg) = s
     return (
         q.fac[1] * u0
-            + q.fac[2] * s.f(u0, s.p)
-            + q.fac[3] * s.g(u0, s.p) * (dW + 0.5 * s.dg(u0, s.p) * (dW^2 - q.h))
+        + q.fac[2] * f(u0, p)
+        + q.fac[3] * g(u0, p) * (dW + 0.5 * dg(u0, p) * (dW^2 - q.h))
     )
-end
-
-function stepforward(::SETD1, q, s::AbstractSDE, u0, dW)
-    return q.fac[1] * u0 + q.fac[2] * s.f(u0, s.p) + q.fac[3] * s.g(u0, s.p) * dW
-end
-
-function stepforward(int::SETD2, q, s::AbstractSDE, u0, dW)
-    fnow = s.f(u0, s.p)
-    if int.first_step
-        h, c = q.h, q.c
-        fac1 = setd1_factors(h, c)
-        un = fac1[1] * u0 + fac1[2] * fnow + fac1[3] * s.g(u0, s.p) * dW
-        int.first_step = false
-    else
-        un = q.fac[1] * u0 + q.fac[2] * fnow + q.fac[3] * int.fprev + q.fac[4] * s.g(u0, s.p) * dW
-    end
-    int.fprev = fnow
-    return un
-end
-
-function stepforward(::IFEulerMaruyama, q, s::AbstractSDE, u0, dW)
-    return q.fac[1] * (u0 + q.h * s.f(u0, s.p)) + q.fac[2] * s.g(u0, s.p) * dW
 end
 
 function solve(s::AbstractSDE, int::Integrator, dW::AbstractWienerIncrement, u0, tmax, saveat; save_after = 0.0)
@@ -251,6 +268,7 @@ function create_sol(tmax, saveat, nens; save_after = 0.0)
 end
 
 function solve2!(u, s::AbstractSDE, int::Integrator, dW::AbstractWienerIncrement, u0, tmax, saveat; save_after = 0.0)
+    isapplicable(s, int.m)
     (; h) = int.q
     niters, nsave = @. round(Int, (tmax, saveat) / h)
 

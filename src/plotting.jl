@@ -59,7 +59,7 @@ function plot_weak_convergence(fig, ax, cvg; error = false, kwargs...)
 end
 
 # General power law
-power_law(x, x0, p, a) = @. a * (x / x0)^p
+power_law(x, p, y0; x0 = minimum(x)) = @. y0 * (x / x0)^p
 
 plot_probability_distribution!(ax, X; bins = 256, kw...) = stephist!(ax, X; normalization = :pdf, bins, kw...)
 
@@ -92,4 +92,38 @@ end
 
 function logticks(base, range)
     return collect(float(base) .^ range), [L"{%$base}^{%$i}" for i in range]
+end
+
+function fitxy(x, y, model, p0)
+    f = curve_fit(model, x, y, p0)
+    c, e = coef(f), standard_errors(f)
+    xu = sort(unique(x))
+    yu = model(xu, c)
+    return (; f, c, e, x = xu, y = yu)
+end
+
+# Some common functions to fit
+_linefunc(x, p) = @. p[1] + p[2] * x
+_powerlawfunc(x, p) = @. p[1] * x^p[2]
+
+fitline(x, y; p0 = [minimum(y), 1.0]) = fitxy(x, y, _linefunc, p0);
+fitpowerlaw(x, y; p0 = [minimum(y), 1.0]) = fitxy(x, y, _powerlawfunc, p0);
+
+function fit_and_plot(ax, cvg, s, color)
+    f = fitpowerlaw(cvg.h, Measurements.value.(cvg[s]))
+    lines!(ax, f.x, f.y; linewidth = 3, color, label=(@sprintf "%.2f" f.c[2]))
+end
+
+function plot_convergence2(fig, ax1, ax2, cvg; ignore_es = false, error = false, kwargs...)
+    (; h, es, ew) = cvg
+    kw = (markersize = 25, linestyle = :dash, linewidth = 3)
+    if !ignore_es
+        y, dy = Measurements.value.(es), Measurements.uncertainty.(es)
+        scatterlines!(ax1, h, y; kw..., kwargs...)
+        if error
+            rangebars!(ax1, h, y .- dy, y .+ dy)
+        end
+    end
+    y, dy = Measurements.value.(ew), Measurements.uncertainty.(ew)
+    scatterlines!(ax2, h, y; kw..., kwargs...)
 end

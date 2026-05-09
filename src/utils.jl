@@ -1,3 +1,5 @@
+using MacroTools, OnlineStats
+
 function addto!(nt::NamedTuple, vals::Tuple)
     for (v, x) in zip(values(nt), vals)
         push!(v, x)
