@@ -1,4 +1,7 @@
+using Random, Printf, FFTW, LinearAlgebra, JLD2, ProgressMeter
+
 # Implements CGLE.
+#
 # ∂_t u = u - (1+ic) |p|^2 p + (1+ib) ∇^2 p + sqrt(2D) eta.
 #
 # Abuses namedtuples to create structures on the fly.

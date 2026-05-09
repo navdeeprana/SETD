@@ -1,4 +1,4 @@
-using Random, OnlineStats, Measurements, LsqFit
+using OnlineStats, Measurements, ProgressMeter
 
 # function resetdW!(dW::ComputedWienerIncrement, t, W, h)
 #     tn, Wn = coarsegrain(t, W, h)
@@ -45,7 +45,7 @@ function solve_for_convergence(sde, int_constructor :: F, p, h_cvg; scale = 32, 
     int = int_constructor(h_analytical)
     t, W = wiener_process(h_small, p.tmax, p.nens)
     dW = wiener_increment_for_convergence(int.m, h_analytical, p.tmax)
-    sol_an = @time @showprogress map(
+    sol_an = @time @showprogress desc="Solving" map(
         Wi -> begin
             resetdW!(dW, t, Wi, h_analytical)
             solve(sde, int, dW, p.u0, p.tmax, saveat; save_after)
@@ -55,12 +55,14 @@ function solve_for_convergence(sde, int_constructor :: F, p, h_cvg; scale = 32, 
     return t, W, sol_an
 end
 
+test_function(x) = x^3
+
+cvg_stats() = OnlineStats.Series(Mean(), Variance())
+
 function create_measurement(s)
     v, N = value(s), nobs(s)
     return measurement(v[1], v[2]/sqrt(N))
 end
-
-test_function(x) = x^3
 
 function convergence(sde, int_constructor::F, p, h_cvg, t, W, sol_an) where {F}
 
@@ -68,10 +70,8 @@ function convergence(sde, int_constructor::F, p, h_cvg, t, W, sol_an) where {F}
 
     saveat, save_after = save_params_for_convergence(p)
 
-    _stats() = OnlineStats.Series(Mean(), Variance())
-
-    @showprogress for h in h_cvg
-        os = OnlineStats.Group(_stats(), _stats(), _stats())
+    @showprogress desc="Convergence" for h in h_cvg
+        os = OnlineStats.Group(cvg_stats(), cvg_stats(), cvg_stats())
         dW = wiener_increment_for_convergence(int_constructor(h).m, h, p.tmax)
         for (Wi, sa) in zip(eachcol(W), sol_an)
             int = int_constructor(h)
@@ -101,38 +101,38 @@ function antithetic!(dW::SO15WienerIncrement, sign)
     return nothing
 end
 
-function solve_for_weak_convergence(sde, int_constructor :: F, dW, p, h) where {F}
+function solve_for_weak_convergence(sde, int_constructor :: F, dW, p, h; show_progress = true) where {F}
     sqrth = sqrt(h)
     saveat, save_after = save_params_for_convergence(p)
     sol = solve(sde, int_constructor(h), dW, p.u0, p.tmax, saveat; save_after)
 
-    os = OnlineStats.Series(Mean(), Variance(), Extrema())
+    os = cvg_stats()
 
+    prog = Progress(p.nens; desc="Solving", enabled = show_progress)
     for _ in 1:p.nens
         redraw!(dW)
 
         int = int_constructor(h)
         sol = solve(sde, int, dW, p.u0, p.tmax, saveat; save_after)
-        fit!(os, sol.u[end])
+        fit!(os, test_function(sol.u[end]))
 
-        # int = int_constructor(h)
-        # antithetic!(dW, -1)
-        # sol = solve(sde, int, dW, p.u0, p.tmax, saveat; save_after)
-        # fit!(os, sol.u[end])
+        int = int_constructor(h)
+        antithetic!(dW, -1)
+        sol = solve(sde, int, dW, p.u0, p.tmax, saveat; save_after)
+        fit!(os, test_function(sol.u[end]))
+        next!(prog)
     end
-    mean, std, ext = value(os.stats[1]), sqrt(value(os.stats[2])), value(os.stats[3])
-    return (; mean, std, ext)
+    return create_measurement(os)
 end
 
-function weak_convergence(sde, int_constructor, dW_constructor, p, h_cvg, stats_an; scale = 32)
-    cvg = (; h = Float64[], ew = Float64[], ewe = Float64[])
+function weak_convergence(sde, int_constructor, dW_constructor, p, h_cvg, stats_an)
+    cvg = (; h = Float64[], ew = Measurement{Float64}[])
 
-    @showprogress for h in h_cvg
+    @showprogress desc="Weak convergence" for h in h_cvg
         dW = dW_constructor(h, p.tmax)
-        stats = solve_for_weak_convergence(sde, int_constructor, dW, p, h)
-        ew = abs(stats.mean - stats_an.mean)
-        err = sqrt(stats.std^2 + stats_an.std^2)
-        addto!(cvg, (h, ew, err))
+        stats = solve_for_weak_convergence(sde, int_constructor, dW, p, h; show_progress = false)
+        ew = abs(stats - stats_an)
+        addto!(cvg, (h, ew))
     end
     return cvg
 end

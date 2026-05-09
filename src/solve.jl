@@ -135,14 +135,6 @@ struct AdditiveSDE{F, DF, D2F, S, P} <: AbstractSDE
     p::P
 end
 
-function isapplicable(s::AbstractSDE, int::AbstractNumericalMethod)
-    return true
-end
-
-function isapplicable(s::S, int::Union{StrongOrder15, WeakOrder20}) where {S <: AbstractSDE}
-    return all(f -> hasfield(S, f), (:df, :d2f)) || error("SDE must define df and d2f functions.")
-end
-
 stepforward(int::Integrator, s::AbstractSDE, u0, dW) = stepforward(int.m, int.q, s, u0, dW)
 
 # Methods for additive SDEs.
@@ -199,6 +191,11 @@ end
 
 # SETD Methods for additive SDEs
 
+function stepforward(::SETDEulerMaruyama, q, s::AdditiveSDE, u0, dW)
+    (; p, f, σ) = s
+    return q.fac[1] * u0 + q.fac[2] * f(u0, p) + q.fac[3] * σ * dW
+end
+
 function stepforward(::SETD1, q, s::AdditiveSDE, u0, dW)
     (; p, f, σ) = s
     return q.fac[1] * u0 + q.fac[2] * f(u0, p) + q.fac[3] * σ * dW
@@ -240,7 +237,6 @@ function stepforward(::SETDMilstein, q, s::MultiplicativeSDE, u0, dW)
 end
 
 function solve(s::AbstractSDE, int::Integrator, dW::AbstractWienerIncrement, u0, tmax, saveat; save_after = 0.0)
-    isapplicable(s, int.m)
     (; h) = int.q
     niters, nsave = @. round(Int, (tmax, saveat) / h)
     sol = (; t = Float64[], u = Float64[])
@@ -268,7 +264,6 @@ function create_sol(tmax, saveat, nens; save_after = 0.0)
 end
 
 function solve2!(u, s::AbstractSDE, int::Integrator, dW::AbstractWienerIncrement, u0, tmax, saveat; save_after = 0.0)
-    isapplicable(s, int.m)
     (; h) = int.q
     niters, nsave = @. round(Int, (tmax, saveat) / h)
 

@@ -1,4 +1,4 @@
-using MacroTools, OnlineStats
+using MacroTools, OnlineStats, StatsBase, LinearAlgebra
 
 function addto!(nt::NamedTuple, vals::Tuple)
     for (v, x) in zip(values(nt), vals)

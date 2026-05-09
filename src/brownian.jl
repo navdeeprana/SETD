@@ -1,3 +1,5 @@
+using Random, StatsBase
+
 function wiener_increment!(dW, s)
     randn!(dW)
     @. dW *= s

@@ -1,3 +1,5 @@
+using CairoMakie, Measurements, LsqFit, Printf
+
 # Create a makie theme for plotting.
 function makietheme()
     theme = Theme(
@@ -38,24 +40,6 @@ end
 function errorscatter!(ax, x, y, dy; kw...)
     p = scatter!(ax, x, y; kw...)
     errorbars!(ax, x, y, dy; color = p.color, whiskerwidth = 0.5 * to_value(p.markersize)[1])
-end
-
-function plot_convergence(fig, ax1, ax2, cvg; ignore_es = false, kwargs...)
-    (; h, es, ew) = cvg
-    kw = (markersize = 25, linestyle = :dash, linewidth = 3)
-    if !ignore_es
-        scatterlines!(ax1, h, es; kw..., kwargs...)
-    end
-    return scatterlines!(ax2, h, ew; kw..., kwargs...)
-end
-
-function plot_weak_convergence(fig, ax, cvg; error = false, kwargs...)
-    h, ew, ewe = cvg.h, cvg.ew, cvg.ewe
-    kw = (markersize = 25, linestyle = :dash, linewidth = 3)
-    scatterlines!(ax, h, ew; kw..., kwargs...)
-    if error
-        rangebars!(ax, h, ew, ew .+ ewe)
-    end
 end
 
 # General power law
@@ -114,16 +98,20 @@ function fit_and_plot(ax, cvg, s, color)
     lines!(ax, f.x, f.y; linewidth = 3, color, label=(@sprintf "%.2f" f.c[2]))
 end
 
-function plot_convergence2(fig, ax1, ax2, cvg; ignore_es = false, error = false, kwargs...)
-    (; h, es, ew) = cvg
+function plot_convergence(ax, h, c; error = false, kwargs...)
     kw = (markersize = 25, linestyle = :dash, linewidth = 3)
-    if !ignore_es
-        y, dy = Measurements.value.(es), Measurements.uncertainty.(es)
-        scatterlines!(ax1, h, y; kw..., kwargs...)
-        if error
-            rangebars!(ax1, h, y .- dy, y .+ dy)
-        end
+    y, dy = Measurements.value.(c), Measurements.uncertainty.(c)
+    scatterlines!(ax, h, y; kw..., kwargs...)
+    if error
+        rangebars!(ax, h, y .- dy, y .+ dy)
     end
-    y, dy = Measurements.value.(ew), Measurements.uncertainty.(ew)
-    scatterlines!(ax2, h, y; kw..., kwargs...)
+end
+
+plot_strong_convergence(ax, cvg; kwargs...) = plot_convergence(ax, cvg.h, cvg.es; kwargs...)
+plot_weak_convergence(ax, cvg; kwargs...) = plot_convergence(ax, cvg.h, cvg.ew; kwargs...)
+
+function plot_convergence_both(ax1, ax2, cvg; kwargs...)
+    (; h, es, ew) = cvg
+    plot_convergence(ax1, h, es; kwargs...)
+    plot_convergence(ax2, h, ew; kwargs...)
 end
