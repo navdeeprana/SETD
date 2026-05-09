@@ -52,17 +52,21 @@ end
 
 InstantWienerIncrement(h::T, tmax::T) where {T} = InstantWienerIncrement(h)
 
-struct ComputedWienerIncrement{T, V} <: AbstractWienerIncrement
-    h::T
-    sqrth::T
-    W::V
-    ComputedWienerIncrement(h::T, W::V) where {T, V} = new{T, V}(h, sqrt(h), W)
-end
+Base.getindex(dW::InstantWienerIncrement, i) = dW.sqrth * randn()
 
-function ComputedWienerIncrement(h::T, tmax::T) where {T}
-    _, W = wiener_process(h, tmax)
-    return ComputedWienerIncrement(h, W)
-end
+# struct ComputedWienerIncrement{T, V} <: AbstractWienerIncrement
+#     h::T
+#     sqrth::T
+#     W::V
+#     ComputedWienerIncrement(h::T, W::V) where {T, V} = new{T, V}(h, sqrt(h), W)
+# end
+
+# function ComputedWienerIncrement(h::T, tmax::T) where {T}
+#     _, W = wiener_process(h, tmax)
+#     return ComputedWienerIncrement(h, W)
+# end
+
+# Base.getindex(dW::ComputedWienerIncrement, i) = dW.W[i + 1] - dW.W[i]
 
 function forced_statistics!(Z, μ, σ)
     μc, σc = mean(Z), std(Z)
@@ -85,6 +89,8 @@ function SampledWienerIncrement(h::T, tmax::T; force_statistics = false) where {
     end
     return SampledWienerIncrement(h, dW)
 end
+
+Base.getindex(dW::SampledWienerIncrement, i) = dW.dW[i]
 
 function redraw!(dW::SampledWienerIncrement; force_statistics = false)
     wiener_increment!(dW.dW, dW.sqrth)
@@ -110,6 +116,8 @@ function SO15WienerIncrement(h::T, tmax::T) where {T}
     return SO15WienerIncrement(h, dW, I10)
 end
 
+Base.getindex(dW::SO15WienerIncrement, i) = (dW.dW[i], dW.I10[i])
+
 function redraw!(dW::SO15WienerIncrement)
     (; h, sqrth, dW, I10) = dW
     wiener_increment!(dW, sqrth)
@@ -117,11 +125,6 @@ function redraw!(dW::SO15WienerIncrement)
     @. I10 = 0.5 * h^(3 / 2) * (dW + I10 / sqrt(3))
     return nothing
 end
-
-Base.getindex(dW::SampledWienerIncrement, i) = dW.dW[i]
-Base.getindex(dW::SO15WienerIncrement, i) = (dW.dW[i], dW.I10[i])
-Base.getindex(dW::ComputedWienerIncrement, i) = dW.W[i + 1] - dW.W[i]
-Base.getindex(dW::InstantWienerIncrement, i) = dW.sqrth * randn()
 
 wiener_process(dW::SampledWienerIncrement) = wiener_process(dW.dW)
 
@@ -149,4 +152,15 @@ function integral_I10(t, W, hcoarse)
     I10 = similar(W, N)
     integral_I10!(I10, t, W, hcoarse)
     return I10
+end
+
+@inline function three_point_random_number(h)
+    r = rand()
+    if r < 2/3
+        return zero(h)
+    elseif r < 5/6
+        return +sqrt(3h)
+    else
+        return -sqrt(3h)
+    end
 end
