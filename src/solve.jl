@@ -71,7 +71,7 @@ end
 # numbers, we need to scale the stochastic integral by sqrt(h). Technically SETD1 should
 # only operate on InstantWienerIncrement, but we leave it this way.
 
-function setd1_factors(h, c; threshold = 1.e-5)
+function setd1_factors(h, c; threshold = 1.0e-5)
     f1 = exp(h * c)
     if (abs(h * c) <= threshold)
         f2 = h + 0.5e0 * c * h^2
@@ -83,16 +83,16 @@ function setd1_factors(h, c; threshold = 1.e-5)
     return f1, f2, f3
 end
 
-function SETD1(h, c; threshold = 1.e-5)
+function SETD1(h, c; threshold = 1.0e-5)
     fac = setd1_factors(h, c; threshold)
     return Integrator(SETD1(), (; h, c, fac))
 end
 
-function setd2_factors(h, c; threshold = 1.e-5)
+function setd2_factors(h, c; threshold = 1.0e-5)
     f1 = exp(h * c)
     if (abs(h * c) <= threshold)
-        f2 = 1.5e0 * h + (2.e0 / 3.e0) * c * h^2
-        f3 = -0.5e0 * h - (1.e0 / 6.e0) * c * h^2
+        f2 = 1.5e0 * h + (2.0e0 / 3.0e0) * c * h^2
+        f3 = -0.5e0 * h - (1.0e0 / 6.0e0) * c * h^2
         f4 = 1.0 + 0.5e0 * c * h
     else
         f2 = ((1 + c * h) * expm1(c * h) - c * h) / (c^2 * h)
@@ -102,7 +102,7 @@ function setd2_factors(h, c; threshold = 1.e-5)
     return f1, f2, f3, f4
 end
 
-function SETD2(h, c; threshold = 1.e-5)
+function SETD2(h, c; threshold = 1.0e-5)
     fac = setd2_factors(h, c; threshold)
     return Integrator(SETD2(true, 0.0), (; h, c, fac))
 end
@@ -148,7 +148,7 @@ function stepforward(m::StrongOrder15, q, s::AdditiveSDE, u0, dW)
     h, f0, df0, d2f0 = q.h, f(u0, p), df(u0, p), d2f(u0, p)
     return (
         u0 + h * f0 + σ * (dW[1] + df0 * dW[2])
-        + 0.5 * h^2 * (f0 * df0 + 0.5 * σ^2 * d2f0)
+            + 0.5 * h^2 * (f0 * df0 + 0.5 * σ^2 * d2f0)
     )
 end
 
@@ -157,7 +157,7 @@ function stepforward(m::WeakOrder20, q, s::AdditiveSDE, u0, dW)
     h, f0, df0, d2f0 = q.h, f(u0, p), df(u0, p), d2f(u0, p)
     return (
         u0 + h * f0 + σ * (1 + 0.5 * h * df0) * dW
-        + 0.5 * h^2 * (f0 * df0 + 0.5 * σ^2 * d2f0)
+            + 0.5 * h^2 * (f0 * df0 + 0.5 * σ^2 * d2f0)
     )
 end
 
@@ -183,7 +183,7 @@ end
 function stepforward(::Milstein, q, s::MultiplicativeSDE, u0, dW)
     return (
         u0 + q.h * s.f(u0, s.p)
-        + s.g(u0, s.p) * (dW + 0.5 * s.dg(u0, s.p) * (dW^2 - q.h))
+            + s.g(u0, s.p) * (dW + 0.5 * s.dg(u0, s.p) * (dW^2 - q.h))
     )
 end
 
@@ -231,8 +231,8 @@ function stepforward(::SETDMilstein, q, s::MultiplicativeSDE, u0, dW)
     (; p, f, g, dg) = s
     return (
         q.fac[1] * u0
-        + q.fac[2] * f(u0, p)
-        + q.fac[3] * g(u0, p) * (dW + 0.5 * dg(u0, p) * (dW^2 - q.h))
+            + q.fac[2] * f(u0, p)
+            + q.fac[3] * g(u0, p) * (dW + 0.5 * dg(u0, p) * (dW^2 - q.h))
     )
 end
 

@@ -38,8 +38,8 @@ function wiener_process(h, tmax, nens)
     return t, W
 end
 
-function coarsegrain(t, W::Vector{T}, h) where {T<:Real}
-    skip = round(Int, h, t[2]-t[1])
+function coarsegrain(t, W::Vector{T}, h) where {T <: Real}
+    skip = round(Int, h / (t[2] - t[1]))
     @views Wh = W[1:skip:end]
     return Wh
 end
@@ -122,7 +122,7 @@ brownian_motion(args...; kwargs...) = wiener_process(args...; kwargs...)
 # I_(1,0) = \int_{t}^{t+h} [\int_{t}^{s} d W(z)] ds
 function integral_I10!(I10, t, W, h)
     δ = t[2] - t[1]
-    skip = round(Int, δ / h)
+    skip = round(Int, h / δ)
     @inbounds for n in eachindex(I10)
         i = (n - 1) * skip + 1
         W0 = W[i]
@@ -144,9 +144,9 @@ end
 
 @inline function three_point_random_number(h)
     r = rand()
-    if r < 2/3
+    if r < 2 / 3
         return zero(h)
-    elseif r < 5/6
+    elseif r < 5 / 6
         return +sqrt(3h)
     else
         return -sqrt(3h)

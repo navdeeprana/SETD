@@ -95,14 +95,14 @@ fitpowerlaw(x, y; p0 = [minimum(y), 1.0]) = fitxy(x, y, _powerlawfunc, p0);
 
 function fit_and_plot(ax, cvg, s, color)
     f = fitpowerlaw(cvg.h, Measurements.value.(cvg[s]))
-    lines!(ax, f.x, f.y; linewidth = 3, color, label=(@sprintf "%.2f" f.c[2]))
+    return lines!(ax, f.x, f.y; linewidth = 3, color, label = (@sprintf "%.2f" f.c[2]))
 end
 
 function plot_convergence(ax, h, c; error = false, kwargs...)
     kw = (markersize = 25, linestyle = :dash, linewidth = 3)
     y, dy = Measurements.value.(c), Measurements.uncertainty.(c)
     scatterlines!(ax, h, y; kw..., kwargs...)
-    if error
+    return if error
         rangebars!(ax, h, y .- dy, y .+ dy)
     end
 end
@@ -113,5 +113,5 @@ plot_weak_convergence(ax, cvg; kwargs...) = plot_convergence(ax, cvg.h, cvg.ew; 
 function plot_convergence_both(ax1, ax2, cvg; kwargs...)
     (; h, es, ew) = cvg
     plot_convergence(ax1, h, es; kwargs...)
-    plot_convergence(ax2, h, ew; kwargs...)
+    return plot_convergence(ax2, h, ew; kwargs...)
 end
