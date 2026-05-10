@@ -1,15 +1,7 @@
 using OnlineStats, Measurements, ProgressMeter
 
-# function resetdW!(dW::ComputedWienerIncrement, t, W, h)
-#     tn, Wn = coarsegrain(t, W, h)
-#     @. dW.W = Wn
-#     return nothing
-# end
-
 function resetdW!(dW::SampledWienerIncrement, t, W, h)
-    tn, Wn = coarsegrain(t, W, h)
-    # Unroll the loop because the @views below allocate
-    # @views @. dW.dW = Wn[2:end] - Wn[1:(end - 1)]
+    Wn = coarsegrain(t, W, h)
     @inbounds for i in eachindex(dW.dW)
         dW.dW[i] = Wn[i+1] - Wn[i]
     end
@@ -17,7 +9,7 @@ function resetdW!(dW::SampledWienerIncrement, t, W, h)
 end
 
 function resetdW!(dW::SO15WienerIncrement, t, W, h)
-    tn, Wn = coarsegrain(t, W, h)
+    Wn = coarsegrain(t, W, h)
     @inbounds for i in eachindex(dW.dW)
         dW.dW[i] = Wn[i+1] - Wn[i]
     end
@@ -50,7 +42,7 @@ function solve_for_convergence(sde, int_constructor :: F, p, h_cvg; scale = 32, 
             resetdW!(dW, t, Wi, h_analytical)
             solve(sde, int, dW, p.u0, p.tmax, saveat; save_after)
         end,
-        eachcol(W)
+        W
         );
     return t, W, sol_an
 end
@@ -73,7 +65,7 @@ function convergence(sde, int_constructor::F, p, h_cvg, t, W, sol_an) where {F}
     @showprogress desc="Convergence" for h in h_cvg
         os = OnlineStats.Group(cvg_stats(), cvg_stats(), cvg_stats())
         dW = wiener_increment_for_convergence(int_constructor(h).m, h, p.tmax)
-        for (Wi, sa) in zip(eachcol(W), sol_an)
+        for (Wi, sa) in zip(W, sol_an)
             int = int_constructor(h)
             resetdW!(dW, t, Wi, h)
             sol = solve(sde, int, dW, p.u0, p.tmax, saveat; save_after)

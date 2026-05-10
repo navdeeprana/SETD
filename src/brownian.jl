@@ -23,25 +23,25 @@ function wiener_process(h, tmax)
     return t, W
 end
 
-# Sample an ensemble of size nens of Brownian motions from [0, tmax] with a time step Δt.
-# Returns time and a dataframe with all the Wiener processes.
+# Sample an ensemble of size nens of Brownian motions from [0, tmax] with a time step h.
+# Returns time and a Vector with all the Wiener processes.
 function wiener_process(h, tmax, nens)
     N, sqrth = round(Int, tmax / h), sqrt(h)
     t = h .* (0:1:N)
-    W = zeros(N + 1, nens)
     dW = zeros(N)
+
+    W = Vector{Float64}[]
     for e in 1:nens
         wiener_increment!(dW, sqrth)
-        W[1, e] = 0.0
-        cumsum!(@view(W[2:end, e]), dW)
+        push!(W, wiener_process(dW))
     end
     return t, W
 end
 
-function coarsegrain(t, W, hcoarse)
-    skip = (length(t) - 1) ÷ round(Int, t[end] / hcoarse)
-    @views tn, Wn = t[1:skip:end], W[1:skip:end, :]
-    return tn, Wn
+function coarsegrain(t, W::Vector{T}, h) where {T<:Real}
+    skip = round(Int, h, t[2]-t[1])
+    @views Wh = W[1:skip:end]
+    return Wh
 end
 
 abstract type AbstractWienerIncrement end
@@ -55,20 +55,6 @@ end
 InstantWienerIncrement(h::T, tmax::T) where {T} = InstantWienerIncrement(h)
 
 Base.getindex(dW::InstantWienerIncrement, i) = dW.sqrth * randn()
-
-# struct ComputedWienerIncrement{T, V} <: AbstractWienerIncrement
-#     h::T
-#     sqrth::T
-#     W::V
-#     ComputedWienerIncrement(h::T, W::V) where {T, V} = new{T, V}(h, sqrt(h), W)
-# end
-
-# function ComputedWienerIncrement(h::T, tmax::T) where {T}
-#     _, W = wiener_process(h, tmax)
-#     return ComputedWienerIncrement(h, W)
-# end
-
-# Base.getindex(dW::ComputedWienerIncrement, i) = dW.W[i + 1] - dW.W[i]
 
 function forced_statistics!(Z, μ, σ)
     μc, σc = mean(Z), std(Z)
@@ -134,10 +120,10 @@ brownian_motion(args...; kwargs...) = wiener_process(args...; kwargs...)
 
 # Compute the stochastic integral I_(1,0) defined as
 # I_(1,0) = \int_{t}^{t+h} [\int_{t}^{s} d W(z)] ds
-function integral_I10!(I10, t, W, hcoarse)
-    skip = (length(t) - 1) ÷ round(Int, t[end] / hcoarse)
+function integral_I10!(I10, t, W, h)
     δ = t[2] - t[1]
-    @inbounds for n in 1:length(I10)
+    skip = round(Int, δ / h)
+    @inbounds for n in eachindex(I10)
         i = (n - 1) * skip + 1
         W0 = W[i]
         s = 0.0
@@ -149,10 +135,10 @@ function integral_I10!(I10, t, W, hcoarse)
     return nothing
 end
 
-function integral_I10(t, W, hcoarse)
-    N = round(Int, t[end] / hcoarse)
+function integral_I10(t, W, h)
+    N = round(Int, t[end] / h)
     I10 = similar(W, N)
-    integral_I10!(I10, t, W, hcoarse)
+    integral_I10!(I10, t, W, h)
     return I10
 end
 
