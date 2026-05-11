@@ -12,6 +12,12 @@ function wiener_increment(N, s)
     return dW
 end
 
+function wiener_process!(W::AbstractVector, dW::AbstractVector)
+    W[1] = 0
+    cumsum!((@views W[2:end]), dW)
+    return nothing
+end
+
 wiener_process(dW::AbstractVector) = pushfirst!(cumsum(dW), 0.0)
 
 # Sample a Brownian motion or a Wiener process from [0, tmax] with a time step Δt.
