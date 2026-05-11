@@ -25,29 +25,35 @@ function wiener_increment_for_convergence(::StrongOrder15, h, tmax)
     return SO15WienerIncrement(h, tmax)
 end
 
-function save_params_for_convergence(p)
-    saveat, save_after = p.tmax, 0.5 * p.tmax
-    return saveat, save_after
+# Simple solve for convergence
+@inline function simple_solve(s::AbstractSDE, int::Integrator, dW::AbstractWienerIncrement, u0, tmax)
+    (; h) = int.q
+    niters = @. round(Int, tmax / h)
+    ui = u0
+    for i in 1:niters
+        dWi = dW[i]
+        ui = stepforward(int, s, ui, dWi)
+    end
+    return ui
 end
 
 function solve_for_convergence(sde, int_constructor::F, p, h_cvg; scale = 32, scale_an = 4) where {F}
     h_small = minimum(h_cvg) / scale
     h_analytical = scale_an * h_small
-    saveat, save_after = save_params_for_convergence(p)
     int = int_constructor(h_analytical)
     t, W = wiener_process(h_small, p.tmax, p.nens)
     dW = wiener_increment_for_convergence(int.m, h_analytical, p.tmax)
-    sol_an = @time @showprogress desc = "Solving" map(
-        Wi -> begin
-            resetdW!(dW, t, Wi, h_analytical)
-            solve(sde, int, dW, p.u0, p.tmax, saveat; save_after)
+    u_an = @time @showprogress desc = "Solving" map(
+        Wn -> begin
+            resetdW!(dW, t, Wn, h_analytical)
+            simple_solve(sde, int, dW, p.u0, p.tmax)
         end,
         W
     )
-    return t, W, sol_an
+    return t, W, u_an
 end
 
-test_function(x) = x^3
+weak_g(x) = x^3
 
 cvg_stats() = OnlineStats.Series(Mean(), Variance())
 
@@ -56,24 +62,22 @@ function create_measurement(s)
     return measurement(v[1], v[2] / sqrt(N))
 end
 
-function convergence(sde, int_constructor::F, p, h_cvg, t, W, sol_an) where {F}
-
+function convergence(sde, int_constructor::F, p, h_cvg, t, W, u_an) where {F}
     cvg = (; h = Float64[], es = Measurement{Float64}[], ew = Measurement{Float64}[])
-
-    saveat, save_after = save_params_for_convergence(p)
 
     @showprogress desc = "Convergence" for h in h_cvg
         os = OnlineStats.Group(cvg_stats(), cvg_stats(), cvg_stats())
         dW = wiener_increment_for_convergence(int_constructor(h).m, h, p.tmax)
-        for (Wi, sa) in zip(W, sol_an)
+
+        for (Wn, un_an) in zip(W, u_an)
             int = int_constructor(h)
-            resetdW!(dW, t, Wi, h)
-            sol = solve(sde, int, dW, p.u0, p.tmax, saveat; save_after)
-            u, uan = sol.u[end], sa.u[end]
-            fit!(os, (abs(u - uan), test_function(u), test_function(uan)))
+            resetdW!(dW, t, Wn, h)
+            un = simple_solve(sde, int, dW, p.u0, p.tmax)
+            fit!(os, (abs(un - un_an), weak_g(un), weak_g(un_an)))
         end
-        es, u, uan = (create_measurement(s) for s in os.stats)
-        ew = abs(u - uan)
+
+        es, un, un_an = (create_measurement(s) for s in os.stats)
+        ew = abs(un - un_an)
         addto!(cvg, (h, es, ew))
     end
     return cvg
@@ -94,10 +98,6 @@ function antithetic!(dW::SO15WienerIncrement, sign)
 end
 
 function solve_for_weak_convergence(sde, int_constructor::F, dW, p, h; show_progress = true) where {F}
-    sqrth = sqrt(h)
-    saveat, save_after = save_params_for_convergence(p)
-    sol = solve(sde, int_constructor(h), dW, p.u0, p.tmax, saveat; save_after)
-
     os = cvg_stats()
 
     prog = Progress(p.nens; desc = "Solving", enabled = show_progress)
@@ -105,13 +105,13 @@ function solve_for_weak_convergence(sde, int_constructor::F, dW, p, h; show_prog
         redraw!(dW)
 
         int = int_constructor(h)
-        sol = solve(sde, int, dW, p.u0, p.tmax, saveat; save_after)
-        fit!(os, test_function(sol.u[end]))
+        un = simple_solve(sde, int, dW, p.u0, p.tmax, saveat; save_after)
+        fit!(os, weak_g(un))
 
         int = int_constructor(h)
         antithetic!(dW, -1)
-        sol = solve(sde, int, dW, p.u0, p.tmax, saveat; save_after)
-        fit!(os, test_function(sol.u[end]))
+        un = simple_solve(sde, int, dW, p.u0, p.tmax, saveat; save_after)
+        fit!(os, weak_g(un))
         next!(prog)
     end
     return create_measurement(os)
