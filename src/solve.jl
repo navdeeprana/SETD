@@ -255,32 +255,3 @@ function solve(s::AbstractSDE, int::Integrator, dW::AbstractWienerIncrement, u0,
     end
     return sol
 end
-
-function create_sol(tmax, saveat, nens; save_after = 0.0)
-    t = 0.0:saveat:tmax
-    t = t[t .> save_after]
-    u = zeros(length(t), nens)
-    return (; t = t, u = u)
-end
-
-function solve2!(u, s::AbstractSDE, int::Integrator, dW::AbstractWienerIncrement, u0, tmax, saveat; save_after = 0.0)
-    (; h) = int.q
-    niters, nsave = @. round(Int, (tmax, saveat) / h)
-
-    save_counter = 0
-    if save_after == 0.0
-        save_counter += 1
-        u[save_counter] = u0
-    end
-
-    ui = u0
-    for i in 1:niters
-        dWi = dW[i]
-        ui = stepforward(int, s, ui, dWi)
-        if (mod(i, nsave) == 0) && (i * h >= save_after)
-            save_counter += 1
-            u[save_counter] = ui
-        end
-    end
-    return nothing
-end
