@@ -23,8 +23,7 @@ Pkg.activate(".");
 Pkg.instantiate();
 
 # %%
-using Revise, Printf, CairoMakie, DataFrames, StatsBase, Random, FFTW, ProgressMeter
-using OnlineStats, StatsBase, LinearAlgebra
+using Revise, Printf, CairoMakie, Random, FFTW, ProgressMeter
 includet("src/plotting.jl")
 includet("src/brownian.jl")
 includet("src/sde_examples.jl")
@@ -38,23 +37,23 @@ Random.seed!(42);
 
 # %%
 function SAO(p)
-    f(u, p) = -p.Γ * (u + p.b * u^p.z)
-    df(u, p) = -p.Γ * (1 + p.z * p.b * u^(p.z - 1))
-    d2f(u, p) = -p.Γ * p.z * (p.z - 1) * p.b * u^(p.z - 2)
-    g(u, p) = sqrt(2 * p.Γ * p.T)
-    return AdditiveSDE(f, df, d2f, g, p)
+    f(u, p) = -p.Γ * (u + p.b * u^3)
+    df(u, p) = -p.Γ * (1 + 3 * p.b * u^2)
+    d2f(u, p) = -6 * p.Γ * p.b * u
+    σ = sqrt(2 * p.Γ * p.T)
+    return AdditiveSDE(f, df, d2f, σ, p)
 end
 
 function SAO_SETD(p)
-    f(u, p) = -p.Γ * p.b * u^p.z
-    df(u, p) = -p.Γ * p.z * p.b * u^(p.z - 1)
-    d2f(u, p) = -p.Γ * p.z * (p.z - 1) * p.b * u^(p.z - 2)
-    g(u, p) = sqrt(2 * p.Γ * p.T)
-    return AdditiveSDE(f, df, d2f, g, p)
+    f(u, p) = -p.Γ * p.b * u^3
+    df(u, p) = -3 * p.Γ * p.b * u^2
+    d2f(u, p) = -6 * p.Γ * p.b * u
+    σ = sqrt(2 * p.Γ * p.T)
+    return AdditiveSDE(f, df, d2f, σ, p)
 end
 
 # %%
-p_rest = (; u0 = 0.0, tmax = 20.0, nens = 50000, T = 6.0, Γ = 5.0, b = 1.0e-2, z = 3, saveat = 0.2, save_after = 2.0);
+p_rest = (; u0 = 0.0, tmax = 20.0, nens = 50000, T = 6.0, Γ = 5.0, b = 1.0e-2, saveat = 0.2, save_after = 2.0);
 
 # %%
 h_scan = [1.0e-2, 2.0e-2, 5.0e-2, 1.0e-1, 2.0e-1]
@@ -138,6 +137,39 @@ resize_to_layout!(fig)
 fig
 
 # %%
+function ccc(x)
+    @views y = x[1:2:end, :]
+    return y
+end
+
+# %%
+x = [rand(5) for _ in 1:5]
+
+# %%
+function wiener_process2(h, tmax, nens)
+    N, sqrth = round(Int, tmax / h), sqrt(h)
+    t = h .* (0:1:N)
+    dW = zeros(N)
+
+    W = Vector{Float64}[]
+    for e in 1:nens
+        wiener_increment!(dW, sqrth)
+        push!(W, wiener_process(dW))
+    end
+    return t, W
+end
+
+Random.seed!(42)
+t, W = wiener_process(0.1, 1.0, 10)
+W
+
+# %%
+Random.seed!(42)
+t, W = wiener_process2(0.1, 1.0, 10)
+tn, Wn = coarsegrain(t, W[1], 0.2)
+Wn
+
+# %%
 function error_in_distribution(sol, pars)
     P = probability_distribution(sol)
     B = boltzmann_distribution(P.x, pars)
@@ -150,9 +182,9 @@ kw = (markersize = 25, linestyle = :dash, linewidth = 3)
 
 fig, ax = figax(xscale = log10, yscale = log10, xlabel = L"h")
 
-sols = [data[n].em for n in 1:5]
-rmse = [error_in_distribution(sol, p_rest)[2] for sol in sols]
-scatterlines!(ax, h_scan, rmse; kw..., label = "EM")
+# sols = [data[n].em for n in 1:5]
+# rmse = [error_in_distribution(sol, p_rest)[2] for sol in sols]
+# scatterlines!(ax, h_scan, rmse; kw..., label = "EM")
 
 sols = [data[n].setdem for n in 1:5]
 rmse = [error_in_distribution(sol, p_rest)[2] for sol in sols]
@@ -175,26 +207,14 @@ fig
 # # Convergence for the SAO
 
 # %%
-p_rest = (; u0 = 3.0, tmax = 1.0, T = 0.1, Γ = 1.0, b = 1.0e-1, z = 2);
-scale = 32
-h_cvg = @. 1 / 2^(2:8)
+h_cvg = @. 1 / 2^(3:6)
 
-# First use a StrongOrder15 solution as an approximation
-h_small = minimum(h_cvg) / scale
-h_analytical = 2 * h_small
-p = (; nens = 50000, p_rest..., saveat = p_rest.tmax)
-args = (p.u0, p.tmax, p.saveat)
-t, W = wiener_process(h_small, p.tmax, p.nens)
+p_rest = (; u0 = 0.5, tmax = 1.0, T = 2.5, Γ = 0.2, b = 5.0);
+p = (nens = 300000, p_rest...)
+sde_an = SAO(p);
 
-sde_an, int = SAO(p), StrongOrder15(h_analytical)
-dW = wiener_increment_for_convergence(int.m, h_analytical, p.tmax)
-sol_an = @showprogress map(
-    Wi -> begin
-        resetdW!(dW, t, Wi, h_analytical)
-        solve(sde_an, int, dW, args..., save_after = 0.5 * p.saveat)
-    end,
-    eachcol(W)
-);
+# %%
+t, W, sol_an = solve_for_convergence(sde_an, StrongOrder15, p, h_cvg; scale = 64);
 
 # %%
 _SETDEulerMaruyama(h) = SETDEulerMaruyama(h, -p.Γ)
@@ -205,54 +225,109 @@ _IFEulerMaruyama(h) = IFEulerMaruyama(h, -p.Γ)
 sde = SAO_SETD(p)
 args = (p, h_cvg, t, W, sol_an)
 cvg = (
-    # em = convergence(sde_an, EulerMaruyama, args...),
-    ab = convergence(sde_an, ABMaruyama, args...),
-    wo2 = convergence(sde_an, WeakOrder20, args...),
-    # so15 = convergence(sde_an, StrongOrder15, args...),
-    # etdem = convergence(sde, _SETDEulerMaruyama, args...),
-    # ifem = convergence(sde, _IFEulerMaruyama, args...),
+    so = convergence(sde_an, StrongOrder15, args...),
     setd1 = convergence(sde, _SETD1, args...),
     setd2 = convergence(sde, _SETD2, args...),
+    ab = convergence(sde_an, ABMaruyama, args...),
+    # ifem = convergence(sde, _IFEulerMaruyama, args...),
 );
 
 # %%
-fig, axes = figax(nx = 2, ny = 1, xscale = log2, s = 130, yscale = log2, xlabel = L"h")
-axes[1].yticks = (collect(2.0 .^ (-10:2:4)), [L"2^{%$i}" for i in -10:2:4])
-axes[2].yticks = (collect(2.0 .^ (-10:2:4)), [L"2^{%$i}" for i in -10:2:4])
-axes[1].title = "Strong convergence for SAO"
-axes[2].title = "Weak convergence for SAO"
-# plot_convergence(fig, axes[1], axes[2], cvg.em, marker = :circle, label = "EM")
-plot_convergence(fig, axes[1], axes[2], cvg.ab, marker = :circle, label = "AB")
-plot_convergence(fig, axes[1], axes[2], cvg.wo2, marker = :circle, label = "WO2")
-# plot_convergence(fig, axes[1], axes[2], cvg.so15, marker = :circle, label = "SO1.5")
-# plot_convergence(fig, axes[1], axes[2], cvg.etdem, marker = :circle, label = "SETD-EM")
-# plot_convergence(fig, axes[1], axes[2], cvg.ifem; ignore_es = true, marker = :circle, label = "IF-EM")
-plot_convergence(fig, axes[1], axes[2], cvg.setd1; ignore_es = true, marker = :circle, label = "SETD1")
-plot_convergence(fig, axes[1], axes[2], cvg.setd2; ignore_es = true, marker = :circle, label = "SETD2")
-for (ax, a, n, text, yf) in zip(axes, [1.5, 1.5], [1.0, 1.0], [L"h", L"h"], [1.2, 1.2])
-    lines!(ax, h_cvg, (@. a * h_cvg^n), linewidth = 3, color = :black)
-    x = (h_cvg[3] + h_cvg[4]) / 2
-    text!(ax, x, yf * a * (x^n); text, fontsize = 30)
-end
-lines!(axes[2], h_cvg, (@. 2.0e-1 * (h_cvg)^2.0), linewidth = 3, color = :black)
+fig, axes = figax(nx = 2, ny = 1, xscale = log2, yscale = log10, s = 130, xlabel = L"h")
+axes[1].yticks = logticks(10.0, -7:1:1)
+axes[2].yticks = logticks(10.0, -7:1:1)
+axes[1].title = "Strong convergence"
+axes[2].title = "Weak convergence"
+plot_convergence_both(axes[1], axes[2], cvg.so, marker = :circle, label = "SO1.5")
+plot_convergence_both(axes[1], axes[2], cvg.setd1, marker = :circle, label = "SETD1")
+plot_convergence_both(axes[1], axes[2], cvg.setd2, marker = :circle, label = "SETD2")
+# plot_convergence_both(axes[1], axes[2], cvg.ab, marker = :circle, label = "AB")
+
+fit_and_plot(axes[1], cvg.so, :es, colors[1])
+fit_and_plot(axes[2], cvg.so, :ew, colors[1])
+
+fit_and_plot(axes[1], cvg.setd1, :es, colors[2])
+fit_and_plot(axes[2], cvg.setd1, :ew, colors[2])
+
+fit_and_plot(axes[1], cvg.setd2, :es, colors[3])
+fit_and_plot(axes[2], cvg.setd2, :ew, colors[3])
+
+# fit_and_plot(axes[1], cvg.ab, :es, colors[4])
+# fit_and_plot(axes[2], cvg.ab, :ew, colors[4])
+
+lines!(axes[2], h_cvg, (@. 1.0e-1 * h_cvg^(2)), color = :black)
+
 axislegend.(axes, position = :rb)
+# save("SETD.png", fig)
 resize_to_layout!(fig)
-save("Untitled.png", fig)
+fig
+
+# %% [markdown]
+# # SETD2 Convergence
+
+# %%
+function check_convergence(T)
+    scale, scale_analytical = 64, 4
+    p_rest = (; u0 = 1.0, tmax = 1.0, T = T, Γ = 1.0, b = 5.0e-1, z = 3)
+    h_cvg = @. 1 / 2^(2:8)
+
+    h_small = minimum(h_cvg) / scale
+    h_analytical = scale_analytical * h_small
+    p = (; nens = 100000, p_rest...)
+    saveat, save_after = save_params_for_convergence(p)
+    t, W = wiener_process(h_small, p.tmax, p.nens)
+
+    sde_an, int = SAO(p), StrongOrder15(h_analytical)
+    dW = wiener_increment_for_convergence(int.m, h_analytical, p.tmax)
+    sol_an = @time @showprogress map(
+        Wi -> begin
+            resetdW!(dW, t, Wi, h_analytical)
+            solve(sde_an, int, dW, p.u0, p.tmax, saveat; save_after)
+        end,
+        eachcol(W)
+    )
+    _SETD2(h) = SETD2(h, -p.Γ)
+    sde = SAO_SETD(p)
+    args = (p, h_cvg, t, W, sol_an)
+    cvg = convergence(sde, _SETD2, args...)
+    return cvg
+end
+
+# %%
+cvg1 = check_convergence(0.5)
+cvg2 = check_convergence(0.2)
+cvg3 = check_convergence(0.1)
+cvg4 = check_convergence(0.05)
+cvg5 = check_convergence(0.02)
+
+# %%
+fig, ax = figax(nx = 1, ny = 1, xscale = log2, s = 130, yscale = log2, xlabel = L"h")
+ax.yticks = (collect(2.0 .^ (-10:2:4)), [L"2^{%$i}" for i in -10:2:4])
+plot_convergence(fig, ax, ax, cvg1; ignore_es = true, marker = :circle, label = L"D = 5 \times 10^{-1}")
+plot_convergence(fig, ax, ax, cvg2; ignore_es = true, marker = :circle, label = L"D = 2 \times 10^{-1}")
+plot_convergence(fig, ax, ax, cvg3; ignore_es = true, marker = :circle, label = L"D = 1 \times 10^{-1}")
+plot_convergence(fig, ax, ax, cvg4; ignore_es = true, marker = :circle, label = L"D = 5 \times 10^{-2}")
+plot_convergence(fig, ax, ax, cvg5; ignore_es = true, marker = :circle, label = L"D = 2 \times 10^{-2}")
+# lines!(ax, h_cvg, (@. 2.0e-2 * (h_cvg)^1.0), linewidth = 3, color = :black)
+lines!(ax, h_cvg, (@. 2.0e-1 * (h_cvg)^2.0), linewidth = 3, color = :red)
+axislegend.(ax, position = :rb)
+resize_to_layout!(fig)
 fig
 
 # %%
-# p = (nens = 10000, p_rest...)
-# weak_cvg = (;
-#     ifem = weak_convergence(sde, sde_an, _IFEulerMaruyama, FixedWienerIncrement, p, h_cvg),
-#     etd1 = weak_convergence(sde, sde_an, _SETD1, FixedWienerIncrement, p, h_cvg),
-#     etd2 = weak_convergence(sde, sde_an, _SETD2, FixedWienerIncrement, p, h_cvg),
-# );
+# With z
+# function SAO(p)
+#     f(u, p) = -p.Γ * (u + p.b * u^p.z)
+#     df(u, p) = -p.Γ * (1 + p.z * p.b * u^(p.z - 1))
+#     d2f(u, p) = -p.Γ * p.z * (p.z - 1) * p.b * u^(p.z - 2)
+#     σ = sqrt(2 * p.Γ * p.T)
+#     return AdditiveSDE(f, df, d2f, σ, p)
+# end
 
-# %%
-# fig, ax = figax(nx = 1, ny = 1, xscale = log2, s = 130, yscale = log2, xlabel = L"h")
-# # plot_convergence(fig, ax, ax, weak_cvg.etd1; ignore_es = true, marker = :circle, label = "SETD1")
-# plot_convergence(fig, ax, ax, weak_cvg.etd2; ignore_es = true, marker = :circle, label = "SETD2")
-# lines!(ax, h_cvg, (@. 1 * h_cvg^1), linewidth = 3, color = :black)
-# lines!(ax, h_cvg, (@. 1 * h_cvg^2), linewidth = 3, color = :black)
-# axislegend(ax, position = :rb)
-# fig
+# function SAO_SETD(p)
+#     f(u, p) = -p.Γ * p.b * u^p.z
+#     df(u, p) = -p.Γ * p.z * p.b * u^(p.z - 1)
+#     d2f(u, p) = -p.Γ * p.z * (p.z - 1) * p.b * u^(p.z - 2)
+#     σ = sqrt(2 * p.Γ * p.T)
+#     return AdditiveSDE(f, df, d2f, σ, p)
+# end

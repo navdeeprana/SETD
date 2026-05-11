@@ -20,11 +20,13 @@ Pkg.activate(".");
 Pkg.instantiate();
 
 # %%
-using Revise, Printf, CairoMakie, DataFrames, StatsBase, Random
+using Revise, Printf, CairoMakie, Random, ProgressMeter
+using OnlineStats, StatsBase, LinearAlgebra
 includet("src/plotting.jl")
 includet("src/brownian.jl")
 includet("src/sde_examples.jl")
 includet("src/solve.jl")
+includet("src/convergence.jl")
 includet("src/utils.jl")
 colors = Makie.wong_colors();
 set_theme!(makietheme())
@@ -36,14 +38,14 @@ function GBM(p)
     f(u, p) = p.a * u
     g(u, p) = p.b * u
     dg(u, p) = p.b
-    return SDE(f, g, dg, p)
+    return MultiplicativeSDE(f, g, dg, p)
 end
 
 function GBM_SETD(p)
     f(u, p) = p.δ * u
     g(u, p) = p.b * u
     dg(u, p) = p.b
-    return SDE(f, g, dg, p)
+    return MultiplicativeSDE(f, g, dg, p)
 end
 
 gbm_analytical(p, t, W) = (; t, u = gbm_analytical.(p.u0, p.a, p.b, t, W))
@@ -117,30 +119,34 @@ fig
 # # Convergence for the GBM
 
 # %%
-p_rest = (u0 = 1.0, tmax = 1.0, a = 2.0, b = 1.0, nens = 50000, saveat = 1 / 2^1)
+p_rest = (u0 = 1.0, tmax = 1.0, a = 2.0, b = 1.0, nens = 50000, saveat = 1 / 2^1, save_after = 0.0)
 p = (δ = 0.5, p_rest...)
 h_cvg = @. 1 / 2^(5:10)
 t, W = brownian_motion(minimum(h_cvg), p.tmax, p.nens);
-tn, Wn = tnWn(t, W, p.saveat)
+tn, Wn = coarsegrain(t, W, p.saveat)
 sol_an = map(Wni -> gbm_analytical(p, tn, Wni), eachcol(Wn));
 
 # %%
 _SETDEulerMaruyama(h) = SETDEulerMaruyama(h, p.a - p.δ)
 _SETDMilstein(h) = SETDMilstein(h, p.a - p.δ)
+sde = GBM_SETD(p)
+
 cvg1 = (
     # em = convergence(GBM(p), EulerMaruyama, p, h_cvg, t, W, sol_an)
     # ml = convergence(GBM(p), Milstein, p, h_cvg, t, W, sol_an)
-    etdem = convergence(GBM_SETD(p), _SETDEulerMaruyama, p, h_cvg, t, W, sol_an),
-    etdml = convergence(GBM_SETD(p), _SETDMilstein, p, h_cvg, t, W, sol_an),
+    etdem = convergence(sde, _SETDEulerMaruyama, p, h_cvg, t, W, sol_an),
+    etdml = convergence(sde, _SETDMilstein, p, h_cvg, t, W, sol_an),
 );
 
 # %%
 p = (δ = 1.0, p_rest...)
 _SETDEulerMaruyama(h) = SETDEulerMaruyama(h, p.a - p.δ)
 _SETDMilstein(h) = SETDMilstein(h, p.a - p.δ)
+sde = GBM_SETD(p)
+
 cvg2 = (
-    etdem = convergence(GBM_SETD(p), _SETDEulerMaruyama, p, h_cvg, t, W, sol_an),
-    etdml = convergence(GBM_SETD(p), _SETDMilstein, p, h_cvg, t, W, sol_an),
+    etdem = convergence(sde, _SETDEulerMaruyama, p, h_cvg, t, W, sol_an),
+    etdml = convergence(sde, _SETDMilstein, p, h_cvg, t, W, sol_an),
 );
 
 # %%
@@ -296,3 +302,5 @@ Legend(fig[1, 3], [e2, e3, e4], ["SETD-EM", "SETD-Milstein", "SETD1"], L"$c=0.5\
 resize_to_layout!(fig)
 save("figs/GBM_stability.pdf", fig)
 fig
+
+# %%
