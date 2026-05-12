@@ -37,19 +37,46 @@ end
     return ui
 end
 
-function solve_for_convergence(sde, int_constructor::F, p, h_cvg; scale = 32, scale_an = 4) where {F}
+function solve_for_convergence_old(sde, int_constructor::F, p, h_cvg; scale = 32, scale_an = 4) where {F}
     h_small = minimum(h_cvg) / scale
-    h_analytical = scale_an * h_small
-    int = int_constructor(h_analytical)
+    h_exact = scale_an * h_small
+    int = int_constructor(h_exact)
     t, W = wiener_process(h_small, p.tmax, p.nens)
-    dW = wiener_increment_for_convergence(int.m, h_analytical, p.tmax)
+    dW = wiener_increment_for_convergence(int.m, h_exact, p.tmax)
     u_an = @time @showprogress desc = "Solving" map(
         Wn -> begin
-            resetdW!(dW, t, Wn, h_analytical)
+            int = int_constructor(h_exact)
+            resetdW!(dW, t, Wn, h_exact)
             simple_solve(sde, int, dW, p.u0, p.tmax)
         end,
         W
     )
+    return t, W, u_an
+end
+
+function solve_for_convergence(sde, int_constructor::F, p, h_cvg; noise_scale = 4, h_exact_scale = 32, return_noise_scale = noise_scale) where {F}
+    h_exact = minimum(h_cvg) / h_exact_scale
+    int = int_constructor(h_exact)
+    dW = wiener_increment_for_convergence(int.m, h_exact, p.tmax)
+
+    h_noise_exact = h_exact / noise_scale
+    te, We = wiener_process(h_noise_exact, p.tmax)
+    dWe = zeros(eltype(We), length(We) - 1)
+
+    h_noise_return = return_noise_scale * h_noise_exact
+
+    t = 0.0:h_noise_return:p.tmax
+    W = [zeros(length(t)) for n in 1:p.nens]
+    u_an = zeros(p.nens)
+    @time @showprogress desc = "Solving" for n in 1:p.nens
+        int = int_constructor(h_exact)
+        wiener_increment!(dWe, sqrt(h_noise_exact))
+        wiener_process!(We, dWe)
+        resetdW!(dW, te, We, h_exact)
+        un = simple_solve(sde, int, dW, p.u0, p.tmax)
+        u_an[n] = un
+        W[n] .= coarsegrain(te, We, h_noise_return)
+    end
     return t, W, u_an
 end
 

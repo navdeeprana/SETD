@@ -137,39 +137,6 @@ resize_to_layout!(fig)
 fig
 
 # %%
-function ccc(x)
-    @views y = x[1:2:end, :]
-    return y
-end
-
-# %%
-x = [rand(5) for _ in 1:5]
-
-# %%
-function wiener_process2(h, tmax, nens)
-    N, sqrth = round(Int, tmax / h), sqrt(h)
-    t = h .* (0:1:N)
-    dW = zeros(N)
-
-    W = Vector{Float64}[]
-    for e in 1:nens
-        wiener_increment!(dW, sqrth)
-        push!(W, wiener_process(dW))
-    end
-    return t, W
-end
-
-Random.seed!(42)
-t, W = wiener_process(0.1, 1.0, 10)
-W
-
-# %%
-Random.seed!(42)
-t, W = wiener_process2(0.1, 1.0, 10)
-tn, Wn = coarsegrain(t, W[1], 0.2)
-Wn
-
-# %%
 function error_in_distribution(sol, pars)
     P = probability_distribution(sol)
     B = boltzmann_distribution(P.x, pars)
@@ -209,12 +176,12 @@ fig
 # %%
 h_cvg = @. 1 / 2^(3:6)
 
-p_rest = (; u0 = 0.5, tmax = 1.0, T = 2.5, Γ = 0.2, b = 5.0);
-p = (nens = 300000, p_rest...)
+p_rest = (; u0 = 0.5, tmax = 1.0, T = 2.5, Γ = 0.2, b = 0.5);
+p = (nens = 400000, p_rest...)
 sde_an = SAO(p);
 
 # %%
-t, W, sol_an = solve_for_convergence(sde_an, StrongOrder15, p, h_cvg; scale = 64);
+t, W, u_an = solve_for_convergence(sde_an, StrongOrder15, p, h_cvg; noise_scale = 2, h_exact_scale = 64, return_noise_scale = 128);
 
 # %%
 _SETDEulerMaruyama(h) = SETDEulerMaruyama(h, -p.Γ)
@@ -223,13 +190,12 @@ _SETD2(h) = SETD2(h, -p.Γ)
 _IFEulerMaruyama(h) = IFEulerMaruyama(h, -p.Γ)
 
 sde = SAO_SETD(p)
-args = (p, h_cvg, t, W, sol_an)
 cvg = (
-    so = convergence(sde_an, StrongOrder15, args...),
-    setd1 = convergence(sde, _SETD1, args...),
-    setd2 = convergence(sde, _SETD2, args...),
-    ab = convergence(sde_an, ABMaruyama, args...),
-    # ifem = convergence(sde, _IFEulerMaruyama, args...),
+    # so = convergence(sde_an, StrongOrder15, p, h_cvg, t, W, u_an),
+    setd1 = convergence(sde, _SETD1, p, h_cvg, t, W, u_an),
+    setd2 = convergence(sde, _SETD2, p, h_cvg, t, W, u_an),
+    # ab = convergence(sde_an, ABMaruyama, p, h_cvg, t, W, u_an),
+    # ifem = convergence(sde, _IFEulerMaruyama, p, h_cvg, t, W, u_an),
 );
 
 # %%
@@ -238,13 +204,13 @@ axes[1].yticks = logticks(10.0, -7:1:1)
 axes[2].yticks = logticks(10.0, -7:1:1)
 axes[1].title = "Strong convergence"
 axes[2].title = "Weak convergence"
-plot_convergence_both(axes[1], axes[2], cvg.so, marker = :circle, label = "SO1.5")
-plot_convergence_both(axes[1], axes[2], cvg.setd1, marker = :circle, label = "SETD1")
-plot_convergence_both(axes[1], axes[2], cvg.setd2, marker = :circle, label = "SETD2")
-# plot_convergence_both(axes[1], axes[2], cvg.ab, marker = :circle, label = "AB")
+# plot_convergence_both(axes[1], axes[2], cvg.so, marker = :circle, color=colors[1], label = "SO1.5")
+plot_convergence_both(axes[1], axes[2], cvg.setd1, marker = :circle, color = colors[2], label = "SETD1")
+plot_convergence_both(axes[1], axes[2], cvg.setd2, marker = :circle, color = colors[3], label = "SETD2")
+# plot_convergence_both(axes[1], axes[2], cvg.ab, marker = :circle, color = colors[4], label = "AB")
 
-fit_and_plot(axes[1], cvg.so, :es, colors[1])
-fit_and_plot(axes[2], cvg.so, :ew, colors[1])
+# fit_and_plot(axes[1], cvg.so, :es, colors[1])
+# fit_and_plot(axes[2], cvg.so, :ew, colors[1])
 
 fit_and_plot(axes[1], cvg.setd1, :es, colors[2])
 fit_and_plot(axes[2], cvg.setd1, :ew, colors[2])

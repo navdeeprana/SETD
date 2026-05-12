@@ -49,18 +49,39 @@ end
 
 # %%
 h_cvg = @. 1 / 2^(3:6)
-
 p_rest = (; u0 = 0.5, tmax = 1.0, σ = 1.0)
-p = (nens = 100000, p_rest...)
+p = (nens = 50000, p_rest...)
 sde = Sine(p);
 
 # %%
-t, W, u_an = solve_for_convergence(sde, StrongOrder15, p, h_cvg; scale = 128);
+t, W, u_an = solve_for_convergence(sde, StrongOrder15, p, h_cvg; noise_scale = 4, h_exact_scale = 32, return_noise_scale = 1);
+@time cvg_so = convergence(sde, StrongOrder15, p, h_cvg, t, W, u_an)
+
+# %%
+fig, axes = figax(nx = 2, ny = 1, xscale = log2, yscale = log10, s = 130, xlabel = L"h")
+axes[1].yticks = logticks(10.0, -7:1:1)
+axes[2].yticks = logticks(10.0, -7:1:1)
+axes[1].title = "Strong convergence"
+axes[2].title = "Weak convergence"
+plot_convergence_both(axes[1], axes[2], cvg_so; marker = :circle, color = colors[1], label = "SO1.5")
+fit_and_plot(axes[1], cvg_so, :es, colors[1])
+fit_and_plot(axes[2], cvg_so, :ew, colors[1])
+axislegend.(axes, position = :rb, nbanks = 3)
+resize_to_layout!(fig)
+fig
+
+# %%
+h_cvg = @. 1 / 2^(3:6)
+p_rest = (; u0 = 0.5, tmax = 1.0, σ = 1.0)
+p = (nens = 400000, p_rest...)
+sde = Sine(p);
+
+# %%
+t, W, u_an = solve_for_convergence(sde, StrongOrder15, p, h_cvg; noise_scale = 4, h_exact_scale = 32, return_noise_scale = 128);
 
 # %%
 @time cvg = (
     em = convergence(sde, EulerMaruyama, p, h_cvg, t, W, u_an),
-    so = convergence(sde, StrongOrder15, p, h_cvg, t, W, u_an),
     ab = convergence(sde, ABMaruyama, p, h_cvg, t, W, u_an),
     wo = convergence(sde, WeakOrder20, p, h_cvg, t, W, u_an),
 );
@@ -71,22 +92,18 @@ axes[1].yticks = logticks(10.0, -7:1:1)
 axes[2].yticks = logticks(10.0, -7:1:1)
 axes[1].title = "Strong convergence"
 axes[2].title = "Weak convergence"
-# plot_convergence_both(axes[1], axes[2], cvg.em, marker = :circle, label = "EM")
-plot_convergence_both(axes[1], axes[2], cvg.so; marker = :circle, color = colors[2], label = "SO1.5")
-plot_convergence_both(axes[1], axes[2], cvg.ab; marker = :circle, color = colors[3], label = "AB")
-plot_convergence_both(axes[1], axes[2], cvg.wo; marker = :circle, color = colors[4], label = "WO")
+plot_convergence_both(axes[1], axes[2], cvg.em, marker = :circle, color = colors[1], label = "EM")
+plot_convergence_both(axes[1], axes[2], cvg.ab; marker = :circle, color = colors[2], label = "AB")
+plot_convergence_both(axes[1], axes[2], cvg.wo; marker = :circle, color = colors[3], label = "WO")
 
-# fit_and_plot(axes[1], cvg.em, :es, colors[1])
-# fit_and_plot(axes[2], cvg.em, :ew, colors[1])
+fit_and_plot(axes[1], cvg.em, :es, colors[1])
+fit_and_plot(axes[2], cvg.em, :ew, colors[1])
 
-fit_and_plot(axes[1], cvg.so, :es, colors[2])
-fit_and_plot(axes[2], cvg.so, :ew, colors[2])
+fit_and_plot(axes[1], cvg.ab, :es, colors[2])
+fit_and_plot(axes[2], cvg.ab, :ew, colors[2])
 
-fit_and_plot(axes[1], cvg.ab, :es, colors[3])
-fit_and_plot(axes[2], cvg.ab, :ew, colors[3])
-
-fit_and_plot(axes[1], cvg.wo, :es, colors[4])
-fit_and_plot(axes[2], cvg.wo, :ew, colors[4])
+fit_and_plot(axes[1], cvg.wo, :es, colors[3])
+fit_and_plot(axes[2], cvg.wo, :ew, colors[3])
 
 axislegend.(axes, position = :rb, nbanks = 3)
 # save("Sine.png", fig)
@@ -95,16 +112,16 @@ fig
 
 # %%
 p_rest = (; u0 = 0.5, tmax = 1.0, σ = 0.05)
-p = (nens = 100000, p_rest...)
+p = (nens = 400000, p_rest...)
 sde = Sine(p);
 
 # %%
-t, W, u_an = solve_for_convergence(sde, StrongOrder15, p, h_cvg; scale = 128);
+t, W, u_an = solve_for_convergence(sde, StrongOrder15, p, h_cvg; noise_scale = 4, h_exact_scale = 32, return_noise_scale = 128);
 
 # %%
 @time cvg = (
-    so = convergence(sde, StrongOrder15, p, h_cvg, t, W, u_an),
     ab = convergence(sde, ABMaruyama, p, h_cvg, t, W, u_an),
+    wo = convergence(sde, WeakOrder20, p, h_cvg, t, W, u_an),
 );
 
 # %%
@@ -113,16 +130,16 @@ axes[1].yticks = logticks(10.0, -7:1:1)
 axes[2].yticks = logticks(10.0, -7:1:1)
 axes[1].title = "Strong convergence"
 axes[2].title = "Weak convergence"
-plot_convergence_both(axes[1], axes[2], cvg.so, marker = :circle, label = "SO1.5")
-plot_convergence_both(axes[1], axes[2], cvg.ab, marker = :circle, label = "AB")
-
-fit_and_plot(axes[1], cvg.so, :es, colors[1])
-fit_and_plot(axes[2], cvg.so, :ew, colors[1])
+plot_convergence_both(axes[1], axes[2], cvg.ab; marker = :circle, color = colors[2], label = "AB")
+plot_convergence_both(axes[1], axes[2], cvg.wo; marker = :circle, color = colors[3], label = "WO")
 
 fit_and_plot(axes[1], cvg.ab, :es, colors[2])
 fit_and_plot(axes[2], cvg.ab, :ew, colors[2])
 
-axislegend.(axes, position = :rb, nbanks = 2)
+fit_and_plot(axes[1], cvg.wo, :es, colors[3])
+fit_and_plot(axes[2], cvg.wo, :ew, colors[3])
+
+axislegend.(axes, position = :rb, nbanks = 3)
 # save("Sine.png", fig)
 resize_to_layout!(fig)
 fig
@@ -139,20 +156,18 @@ end
 # %%
 h_cvg = @. 1 / 2^(3:6)
 
-p_rest = (; u0 = 0.5, tmax = 1.0, a = 0.5, b = 0.5, σ = 1.0)
-p = (nens = 200000, p_rest...)
+p_rest = (; u0 = 0.5, tmax = 1.0, a = 0.5, b = 0.2, σ = 1.0)
+p = (nens = 100000, p_rest...)
 sde = Phi4(p);
 
 # %%
-t, W, sol_an = solve_for_convergence(sde, StrongOrder15, p, h_cvg; scale = 128);
-args = (p, h_cvg, t, W, sol_an);
+t, W, u_an = solve_for_convergence(sde, StrongOrder15, p, h_cvg; noise_scale = 4, h_exact_scale = 32, return_noise_scale = 128);
 
 # %%
 @time cvg = (
-    em = convergence(sde, EulerMaruyama, args...),
-    so = convergence(sde, StrongOrder15, args...),
-    ab = convergence(sde, ABMaruyama, args...),
-    wo = convergence(sde, WeakOrder20, args...),
+    em = convergence(sde, EulerMaruyama, p, h_cvg, t, W, u_an),
+    ab = convergence(sde, ABMaruyama, p, h_cvg, t, W, u_an),
+    wo = convergence(sde, WeakOrder20, p, h_cvg, t, W, u_an),
 );
 
 # %%
@@ -161,27 +176,28 @@ axes[1].yticks = logticks(10.0, -7:1:1)
 axes[2].yticks = logticks(10.0, -7:1:1)
 axes[1].title = "Strong convergence"
 axes[2].title = "Weak convergence"
-plot_convergence_both(axes[1], axes[2], cvg.em, marker = :circle, label = "EM")
-plot_convergence_both(axes[1], axes[2], cvg.so, marker = :circle, label = "SO1.5")
-plot_convergence_both(axes[1], axes[2], cvg.ab, marker = :circle, label = "AB")
-plot_convergence_both(axes[1], axes[2], cvg.wo, marker = :circle, label = "WO")
+plot_convergence_both(axes[1], axes[2], cvg.em, marker = :circle, color = colors[1], label = "EM")
+plot_convergence_both(axes[1], axes[2], cvg.ab, marker = :circle, color = colors[2], label = "AB")
+plot_convergence_both(axes[1], axes[2], cvg.wo, marker = :circle, color = colors[3], label = "WO")
 
 fit_and_plot(axes[1], cvg.em, :es, colors[1])
 fit_and_plot(axes[2], cvg.em, :ew, colors[1])
 
-fit_and_plot(axes[1], cvg.so, :es, colors[2])
-fit_and_plot(axes[2], cvg.so, :ew, colors[2])
+fit_and_plot(axes[1], cvg.ab, :es, colors[2])
+fit_and_plot(axes[2], cvg.ab, :ew, colors[2])
 
-fit_and_plot(axes[1], cvg.ab, :es, colors[3])
-fit_and_plot(axes[2], cvg.ab, :ew, colors[3])
-
-fit_and_plot(axes[1], cvg.wo, :es, colors[4])
-fit_and_plot(axes[2], cvg.wo, :ew, colors[4])
+fit_and_plot(axes[1], cvg.wo, :es, colors[3])
+fit_and_plot(axes[2], cvg.wo, :ew, colors[3])
 
 axislegend.(axes, position = :rb)
 # save("Phi4.png", fig)
 resize_to_layout!(fig)
 fig
+
+# %%
+p = (nens = 10000, p_rest...)
+sde = Phi4(p);
+t, W, u_an = solve_for_convergence(sde, StrongOrder15, p, h_cvg; noise_scale = 4, h_exact_scale = 32, return_noise_scale = 128);
 
 # %% [markdown]
 # # Weak convergence
