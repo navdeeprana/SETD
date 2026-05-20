@@ -50,6 +50,7 @@ Milstein(h) = Integrator(Milstein(), (; h))
 
 StrongOrder15(h) = Integrator(StrongOrder15(), (; h, f1 = 0.5 * h, f2 = (0.5 / sqrt(3)) * h^(3 / 2)))
 WeakOrder20(h) = Integrator(WeakOrder20(), (; h))
+WeakOrder30(h) = Integrator(WeakOrder30(), (; h))
 
 ABMaruyama(h) = Integrator(ABMaruyama(true, 0.0), (; h))
 
@@ -136,10 +137,12 @@ struct MultiplicativeSDE{F, G, DG, P} <: AbstractSDE
 end
 
 # Define an additive SDE du = f(u,p) + σ dW, where df = ∂f/∂u and d2f = ∂^2f/∂u^2.
-struct AdditiveSDE{F, DF, D2F, S, P} <: AbstractSDE
+struct AdditiveSDE{F, DF, D2F, D3F, D4F, S, P} <: AbstractSDE
     f::F
     df::DF
     d2f::D2F
+    d3f::D3F
+    d4f::D4F
     σ::S
     p::P
 end

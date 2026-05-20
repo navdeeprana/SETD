@@ -204,10 +204,9 @@ function single_step_error(sde, int_constructor::F1, err_fun1::F2, err_fun2::F3,
     os = OnlineStats.Group(cvg_stats(), cvg_stats(), cvg_stats(), cvg_stats())
 
     sqrth = sqrt(h)
-    int, int_an = int_constructor(h), WeakOrder20(h)
+    int, int_an = int_constructor(h), WeakOrder30(h)
 
     multi_step = multi_step || (int.m isa ABMaruyama)
-    print(nsteps)
 
     prog = Progress(p.nens)
     for n in 1:p.nens
