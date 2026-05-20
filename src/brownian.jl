@@ -102,25 +102,25 @@ function resample!(dW::SampledWienerIncrement, t, W, h)
     return nothing
 end
 
-mutable struct SO15WienerIncrement{T, V1, V2} <: AbstractWienerIncrement
+mutable struct TwoPointWienerIncrement{T, V1, V2} <: AbstractWienerIncrement
     h::T
     sqrth::T
     const dW::V1
     const I10::V2
-    SO15WienerIncrement(h::T, W::V1, I10::V2) where {T, V1, V2} = new{T, V1, V2}(h, sqrt(h), W, I10)
+    TwoPointWienerIncrement(h::T, W::V1, I10::V2) where {T, V1, V2} = new{T, V1, V2}(h, sqrt(h), W, I10)
 end
 
-function SO15WienerIncrement(h::T, tmax::T) where {T}
+function TwoPointWienerIncrement(h::T, tmax::T) where {T}
     N = round(Int, tmax / h)
     dW = wiener_increment(N, sqrt(h))
     I10 = randn(T, N)
     @. I10 = 0.5 * h^(3 / 2) * (dW + I10 / sqrt(3))
-    return SO15WienerIncrement(h, dW, I10)
+    return TwoPointWienerIncrement(h, dW, I10)
 end
 
-Base.getindex(dW::SO15WienerIncrement, i) = (dW.dW[i], dW.I10[i])
+Base.getindex(dW::TwoPointWienerIncrement, i) = (dW.dW[i], dW.I10[i])
 
-function resample!(dW::SO15WienerIncrement)
+function resample!(dW::TwoPointWienerIncrement)
     (; h, sqrth, dW, I10) = dW
     wiener_increment!(dW, sqrth)
     randn!(I10)
@@ -128,7 +128,7 @@ function resample!(dW::SO15WienerIncrement)
     return nothing
 end
 
-function resample!(dW::SO15WienerIncrement, t, W, h)
+function resample!(dW::TwoPointWienerIncrement, t, W, h)
     Wn = coarsegrain(t, W, h)
     @inbounds for i in eachindex(dW.dW)
         dW.dW[i] = Wn[i + 1] - Wn[i]

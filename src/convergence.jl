@@ -5,8 +5,8 @@ function wiener_increment_for_convergence(::AbstractNumericalMethod, h, tmax)
     return SampledWienerIncrement(h, tmax)
 end
 
-function wiener_increment_for_convergence(::StrongOrder15, h, tmax)
-    return SO15WienerIncrement(h, tmax)
+function wiener_increment_for_convergence(::Union{StrongOrder15, WeakOrder30}, h, tmax)
+    return TwoPointWienerIncrement(h, tmax)
 end
 
 # Simple solve for convergence
@@ -19,23 +19,6 @@ end
         ui = stepforward(int, s, ui, dWi)
     end
     return ui
-end
-
-function solve_for_convergence_old(sde, int_constructor::F, p, h_cvg; scale = 32, scale_an = 4) where {F}
-    h_small = minimum(h_cvg) / scale
-    h_exact = scale_an * h_small
-    int = int_constructor(h_exact)
-    t, W = wiener_process(h_small, p.tmax, p.nens)
-    dW = wiener_increment_for_convergence(int.m, h_exact, p.tmax)
-    u_an = @time @showprogress desc = "Solving" map(
-        Wn -> begin
-            int = int_constructor(h_exact)
-            resample!(dW, t, Wn, h_exact)
-            simple_solve(sde, int, dW, p.u0, p.tmax)
-        end,
-        W
-    )
-    return t, W, u_an
 end
 
 function solve_for_convergence(
@@ -75,7 +58,7 @@ end
 
 test_f(x) = x^4
 
-cvg_stats() = OnlineStats.Series(Mean(), Variance())
+meanvar() = OnlineStats.Series(Mean(), Variance())
 
 function create_measurement(s)
     v, N = value(s), nobs(s)
@@ -83,22 +66,22 @@ function create_measurement(s)
 end
 
 function convergence(sde, int_constructor::F, p, h_cvg, t, W, u_an) where {F}
-    cvg = (; h = Float64[], es = Measurement{Float64}[], ew = Measurement{Float64}[], f2 = Measurement{Float64}[])
+    cvg = (; h = Float64[], es = Measurement{Float64}[], ew = Measurement{Float64}[])
 
     @showprogress desc = "Convergence" for h in h_cvg
-        os = OnlineStats.Group(cvg_stats(), cvg_stats(), cvg_stats(), cvg_stats())
+        os = OnlineStats.Group(meanvar(), meanvar(), meanvar(), meanvar())
         dW = wiener_increment_for_convergence(int_constructor(h).m, h, p.tmax)
 
         for (Wn, un_an) in zip(W, u_an)
             int = int_constructor(h)
             resample!(dW, t, Wn, h)
             un = simple_solve(sde, int, dW, p.u0, p.tmax)
-            fit!(os, (abs(un - un_an), test_f(un), test_f(un_an), 6 * un^2 * cos(un)))
+            fit!(os, (abs(un - un_an), test_f(un), test_f(un_an)))
         end
 
-        es, un, un_an, f2 = (create_measurement(s) for s in os.stats)
+        es, un, un_an = (create_measurement(s) for s in os.stats)
         ew = abs(un - un_an)
-        addto!(cvg, (h, es, ew, f2))
+        addto!(cvg, (h, es, ew))
     end
     return cvg
 end
@@ -111,7 +94,7 @@ function antithetic!(dW::SampledWienerIncrement, sign)
     return nothing
 end
 
-function antithetic!(dW::SO15WienerIncrement, sign)
+function antithetic!(dW::TwoPointWienerIncrement, sign)
     @. dW.dW = sign * dW.dW
     @. dW.I10 = sign * dW.I10
     return nothing
@@ -123,28 +106,29 @@ function solve_for_weak_convergence(
     ) where {F1, F2}
 
     chunks = OhMyThreads.chunks(1:p.nens; n = max_threads)
-    os_all = [cvg_stats() for _ in chunks]
+    os_chunks = [meanvar() for _ in chunks]
 
     prog = Progress(p.nens; desc = "Solving on $(max_threads) threads.", enabled = show_progress)
     @tasks for (nc, chunk) in enumerate(chunks)
-        dW = dW_constructor(h, p.tmax)
+        local dW = dW_constructor(h, p.tmax)
+        local int = int_constructor(h)
         for n in chunk
+            reset!(int.m)
             resample!(dW)
-            int = int_constructor(h)
             un = simple_solve(sde, int, dW, p.u0, p.tmax)
-            fit!(os_all[nc], test_f(un))
+            fit!(os_chunks[nc], test_f(un))
 
             if anti
-                int = int_constructor(h)
+                reset!(int.m)
                 antithetic!(dW, -1)
                 un = simple_solve(sde, int, dW, p.u0, p.tmax)
-                fit!(os_all[nc], test_f(un))
+                fit!(os_chunks[nc], test_f(un))
             end
             next!(prog)
         end
     end
-    os = cvg_stats()
-    for osc in os_all
+    os = meanvar()
+    for osc in os_chunks
         merge!(os, osc)
     end
     return create_measurement(os)
@@ -161,38 +145,6 @@ function weak_convergence(sde, int_constructor, dW_constructor, p, h_cvg, stats_
     return cvg
 end
 
-function single_step_error_threaded(sde, int_constructor::F, p, h; max_threads = Base.Threads.nthreads()) where {F}
-    chunks = OhMyThreads.chunks(1:p.nens; n = max_threads)
-    os_all = [OnlineStats.Group(cvg_stats(), cvg_stats(), cvg_stats()) for _ in chunks]
-    prog = Progress(p.nens; desc = "Solving on $(max_threads) threads.")
-    @tasks for (nc, chunk) in enumerate(chunks)
-        sqrth = sqrt(h)
-        int = int_constructor(h)
-        int_an = WeakOrder20(h)
-        for n in chunk
-            reset!(int.m)
-            dWi = sqrth * randn()
-            un_an = stepforward(int_an, sde, p.u0, dWi)
-            un = stepforward(int, sde, p.u0, dWi)
-
-            local u0_an = un_an
-            # dWi = sqrth * randn()
-            # un_an = stepforward(int_an, sde, un_an, dWi)
-            # un = stepforward(int, sde, un, dWi)
-
-            to_fit = (u0_an, test_f(un_an), test_f(un))
-            fit!(os_all[nc], to_fit)
-            next!(prog)
-        end
-    end
-    os = OnlineStats.Group(cvg_stats(), cvg_stats(), cvg_stats())
-    for osc in os_all
-        merge!(os, osc)
-    end
-    u0, avg_an, avg = (create_measurement(s) for s in os)
-    return u0, abs.(avg_an - avg)
-end
-
 draw(m::AbstractNumericalMethod, sqrth) = sqrth * randn()
 
 function draw(m::WeakOrder30, sqrth)
@@ -200,8 +152,8 @@ function draw(m::WeakOrder30, sqrth)
     return sqrth * U1, 0.5 * sqrth^3 * (U1 + U2 / sqrt(3))
 end
 
-function single_step_error(sde, int_constructor::F1, err_fun1::F2, err_fun2::F3, p, h; multi_step = false, nsteps = 5) where {F1, F2, F3}
-    os = OnlineStats.Group(cvg_stats(), cvg_stats(), cvg_stats(), cvg_stats())
+function local_error(sde, int_constructor::F1, err_fun1::F2, err_fun2::F3, p, h; multi_step = false, nsteps = 5) where {F1, F2, F3}
+    os = OnlineStats.Group(meanvar(), meanvar(), meanvar(), meanvar())
 
     sqrth = sqrt(h)
     int, int_an = int_constructor(h), WeakOrder30(h)
