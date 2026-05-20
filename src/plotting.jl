@@ -94,8 +94,10 @@ fitline(x, y; p0 = [minimum(y), 1.0]) = fitxy(x, y, _linefunc, p0);
 fitpowerlaw(x, y; p0 = [minimum(y), 1.0]) = fitxy(x, y, _powerlawfunc, p0);
 
 function fit_and_plot(ax, cvg, s, color)
-    f = fitpowerlaw(cvg.h, Measurements.value.(cvg[s]))
-    return lines!(ax, f.x, f.y; linewidth = 3, color, label = (@sprintf "%.2f" f.c[2]))
+    x, y = cvg.h, Measurements.value.(cvg[s])
+    f = fitline(log.(x), log.(y))
+    a, p = exp(f.c[1]), f.c[2]
+    return lines!(ax, x, (@. a * x^p); linewidth = 3, color, label = (@sprintf "%.2f" p))
 end
 
 function plot_convergence(ax, h, c; error = false, kwargs...)

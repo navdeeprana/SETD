@@ -1,14 +1,14 @@
 using Random, StatsBase
 
-function wiener_increment!(dW, s)
+function wiener_increment!(dW, sqrth)
     randn!(dW)
-    @. dW *= s
+    @. dW *= sqrth
     return nothing
 end
 
-function wiener_increment(N, s)
+function wiener_increment(N, sqrth)
     dW = randn(N)
-    @. dW *= s
+    @. dW *= sqrth
     return dW
 end
 
@@ -86,10 +86,18 @@ end
 
 Base.getindex(dW::SampledWienerIncrement, i) = dW.dW[i]
 
-function redraw!(dW::SampledWienerIncrement; force_statistics = false)
+function resample!(dW::SampledWienerIncrement; force_statistics = false)
     wiener_increment!(dW.dW, dW.sqrth)
     if force_statistics
         forced_statistics!(dW.dW, 0.0, dW.sqrth)
+    end
+    return nothing
+end
+
+function resample!(dW::SampledWienerIncrement, t, W, h)
+    Wn = coarsegrain(t, W, h)
+    @inbounds for i in eachindex(dW.dW)
+        dW.dW[i] = Wn[i + 1] - Wn[i]
     end
     return nothing
 end
@@ -112,11 +120,20 @@ end
 
 Base.getindex(dW::SO15WienerIncrement, i) = (dW.dW[i], dW.I10[i])
 
-function redraw!(dW::SO15WienerIncrement)
+function resample!(dW::SO15WienerIncrement)
     (; h, sqrth, dW, I10) = dW
     wiener_increment!(dW, sqrth)
     randn!(I10)
-    @. I10 = 0.5 * h^(3 / 2) * (dW + I10 / sqrt(3))
+    @. I10 = 0.5 * h^(3 / 2) * (dW / sqrth + I10 / sqrt(3))
+    return nothing
+end
+
+function resample!(dW::SO15WienerIncrement, t, W, h)
+    Wn = coarsegrain(t, W, h)
+    @inbounds for i in eachindex(dW.dW)
+        dW.dW[i] = Wn[i + 1] - Wn[i]
+    end
+    integral_I10!(dW.I10, t, W, h)
     return nothing
 end
 

@@ -17,6 +17,18 @@ function probability_distribution(sol; bins = -9:0.2:9)
     return (; x = midpoints(h), P = hn.weights)
 end
 
+function pdf(u, bins)
+    h = OnlineStats.Hist(bins)
+    fit!(h, u)
+    hn = normalize(Histogram(h.edges, h.counts))
+    return (; x = midpoints(h), P = hn.weights)
+end
+
+function numerical_mean(f::F, P) where {F}
+    Δx = P.x[2] - P.x[1]
+    return sum(@. Δx * P.P * f(P.x))
+end
+
 function boltzmann_distribution(x, pars)
     P = @. exp(-(x^2 / 2 + pars.b * x^4 / 4) / pars.T)
     P = P / sum(P * (x[2] - x[1]))
