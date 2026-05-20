@@ -15,6 +15,7 @@ struct EulerMaruyama <: AbstractNumericalMethod end
 struct Milstein <: AbstractNumericalMethod end
 struct StrongOrder15 <: AbstractNumericalMethod end
 struct WeakOrder20 <: AbstractNumericalMethod end
+struct WeakOrder30 <: AbstractNumericalMethod end
 
 mutable struct ABMaruyama{T} <: AbstractNumericalMethod
     first_step::Bool
@@ -116,6 +117,14 @@ function IFEulerMaruyama(h, c)
     return Integrator(IFEulerMaruyama(), (; h, c, fac))
 end
 
+reset!(m::AbstractNumericalMethod) = nothing
+
+function reset!(m::Union{ABMaruyama, SETD2})
+    m.first_step = true
+    m.fprev = 0.0
+    return nothing
+end
+
 abstract type AbstractSDE end
 
 # Define a multiplicative SDE du = f(u,p) + g(u,p) dW, where dg = ∂g/∂u.
@@ -145,19 +154,31 @@ end
 
 function stepforward(m::StrongOrder15, q, s::AdditiveSDE, u0, dW)
     (; p, f, df, d2f, σ) = s
-    h, f0, df0, d2f0 = q.h, f(u0, p), df(u0, p), d2f(u0, p)
+    h, a, da, d2a = q.h, f(u0, p), df(u0, p), d2f(u0, p)
     return (
-        u0 + h * f0 + σ * (dW[1] + df0 * dW[2])
-            + 0.5 * h^2 * (f0 * df0 + 0.5 * σ^2 * d2f0)
+        u0 + h * a + σ * (dW[1] + da * dW[2])
+            + 0.5 * h^2 * (a * da + 0.5 * σ^2 * d2a)
     )
 end
 
 function stepforward(m::WeakOrder20, q, s::AdditiveSDE, u0, dW)
     (; p, f, df, d2f, σ) = s
-    h, f0, df0, d2f0 = q.h, f(u0, p), df(u0, p), d2f(u0, p)
+    h, a, da, d2a = q.h, f(u0, p), df(u0, p), d2f(u0, p)
     return (
-        u0 + h * f0 + σ * (1 + 0.5 * h * df0) * dW
-            + 0.5 * h^2 * (f0 * df0 + 0.5 * σ^2 * d2f0)
+        u0 + h * a + σ * (1 + 0.5 * h * da) * dW
+            + 0.5 * h^2 * (a * da + 0.5 * σ^2 * d2a)
+    )
+end
+
+function stepforward(m::WeakOrder30, q, s::AdditiveSDE, u0, dW)
+    (; p, f, df, d2f, d3f, d4f, σ) = s
+    h, a, da, d2a, d3a, d4a = q.h, f(u0, p), df(u0, p), d2f(u0, p), d3f(u0, p), d4f(u0, p)
+    return (
+        u0 + h * a + σ * dW[1] + σ * da * dW[2]
+            + 0.5 * h^2 * (a * da + 0.5 * σ^2 * d2a)
+            + (h^2 / 6) * σ * (da^2 + 2 * a * d2a + σ^2 * d3a) * dW[1]
+            + (h / 6) * σ^2 * d2a * (dW[1]^2 - h)
+            + (h^3 / 6) * (a * da^2 + a^2 * d2a + σ^2 * (1.5 * da * d2a + a * d3a) + 0.25 * σ^4 * d4a)
     )
 end
 
