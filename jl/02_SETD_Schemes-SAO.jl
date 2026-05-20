@@ -177,7 +177,7 @@ fig
 h_cvg = @. 1 / 2^(3:6)
 
 p_rest = (; u0 = 0.5, tmax = 1.0, T = 2.5, Γ = 0.2, b = 0.5);
-p = (nens = 400000, p_rest...)
+p = (nens = 1000000, p_rest...)
 sde_an = SAO(p);
 
 # %%
