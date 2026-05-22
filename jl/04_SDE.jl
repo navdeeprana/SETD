@@ -223,20 +223,25 @@ p_rest = (; u0 = 0.5, tmax = 1.0, σ = 1.0)
 p = (nens = 50000000, p_rest...)
 sde = Sine(p);
 
-scale = 64
-h_small = minimum(h_cvg) / scale
-stats_an = solve_for_weak_convergence(sde, WeakOrder30, TwoPointWienerIncrement, p, h_small);
+# scale = 64
+# h_small = minimum(h_cvg) / scale
+# stats_an = solve_for_weak_convergence(sde, WeakOrder30, TwoPointWienerIncrement, p, h_small);
 
 # %%
+stats_th = measurement(14.5488017, 0.000006)
+
+# %%
+stats_ch = stats_th
 weak = (
-    em = weak_convergence(sde, EulerMaruyama, SampledWienerIncrement, p, h_cvg, stats_an),
-    ab = weak_convergence(sde, ABMaruyama, SampledWienerIncrement, p, h_cvg, stats_an),
-    ab2 = weak_convergence(sde, ABMaruyama, SampledWienerIncrement, p, h_cvg, stats_an; anti = true),
-    wo = weak_convergence(sde, WeakOrder20, SampledWienerIncrement, p, h_cvg, stats_an),
+    em = weak_convergence(sde, EulerMaruyama, SampledWienerIncrement, p, h_cvg, stats_ch),
+    ab = weak_convergence(sde, ABMaruyama, SampledWienerIncrement, p, h_cvg, stats_ch),
+    ab2 = weak_convergence(sde, ABMaruyama, SampledWienerIncrement, p, h_cvg, stats_ch; anti = true),
+    wo = weak_convergence(sde, WeakOrder20, SampledWienerIncrement, p, h_cvg, stats_ch),
 );
 
 # %%
-weak.em
+# using JLD2
+# jldsave("weakcvg.jld2"; weak)
 
 # %%
 fig, ax = figax(nx = 1, ny = 1, xscale = log2, yscale = log10, s = 130, xlabel = L"h")
@@ -245,8 +250,31 @@ plot_weak_convergence(ax, weak.ab; label = "AB")
 plot_weak_convergence(ax, weak.ab2; label = "AB2")
 plot_weak_convergence(ax, weak.wo; label = "WO20")
 lines!(ax, h_cvg, (@. 2 * h_cvg^1), linewidth = 3, color = :black)
-lines!(ax, h_cvg, (@. 2 * h_cvg^2), linewidth = 3, color = :black)
+lines!(ax, h_cvg, (@. 4 * h_cvg^2), linewidth = 3, color = :black)
 axislegend(ax, position = :rb)
+save("Sine_Weak_5e7.pdf", fig)
+fig
+
+# %%
+weak.ab
+
+# %%
+h_cvg = @. 1 / 2^(3:4)
+p_rest = (; u0 = 0.5, tmax = 1.0, σ = 1.0)
+sde = Sine(p);
+
+nens_val = [1000, 10000, 100000, 1000000]
+err = Measurement{Float64}[]
+@showprogress for nens in nens_val
+    p = (; nens, p_rest...)
+    cvg = weak_convergence(sde, WeakOrder20, SampledWienerIncrement, p, h_cvg, stats_ch)
+    push!(err, cvg.ew[end])
+end
+
+# %%
+fig, ax = figax(yscale = log10, xscale = log10)
+scatterlines!(ax, nens_val, Measurements.uncertainty.(err))
+scatterlines!(ax, nens_val, (@. 30 / sqrt(nens_val)))
 fig
 
 # %%

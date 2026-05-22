@@ -69,11 +69,13 @@ function convergence(sde, int_constructor::F, p, h_cvg, t, W, u_an) where {F}
     cvg = (; h = Float64[], es = Measurement{Float64}[], ew = Measurement{Float64}[])
 
     @showprogress desc = "Convergence" for h in h_cvg
-        os = OnlineStats.Group(meanvar(), meanvar(), meanvar(), meanvar())
-        dW = wiener_increment_for_convergence(int_constructor(h).m, h, p.tmax)
+        os = OnlineStats.Group(meanvar(), meanvar(), meanvar())
+
+        int = int_constructor(h)
+        dW = wiener_increment_for_convergence(int.m, h, p.tmax)
 
         for (Wn, un_an) in zip(W, u_an)
-            int = int_constructor(h)
+            reset!(int)
             resample!(dW, t, Wn, h)
             un = simple_solve(sde, int, dW, p.u0, p.tmax)
             fit!(os, (abs(un - un_an), test_f(un), test_f(un_an)))
@@ -152,7 +154,10 @@ function draw(m::WeakOrder30, sqrth)
     return sqrth * U1, 0.5 * sqrth^3 * (U1 + U2 / sqrt(3))
 end
 
-function local_error(sde, int_constructor::F1, err_fun1::F2, err_fun2::F3, p, h; multi_step = false, nsteps = 5) where {F1, F2, F3}
+function local_error(
+        sde, int_constructor::F1, err_fun1::F2, err_fun2::F3, p, h;
+        multi_step = false, nsteps = 5
+    ) where {F1, F2, F3}
     os = OnlineStats.Group(meanvar(), meanvar(), meanvar(), meanvar())
 
     sqrth = sqrt(h)
