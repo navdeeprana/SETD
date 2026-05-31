@@ -91,7 +91,7 @@ p_rest = (; u0 = -2.5, σ = 1.0, k = 1.0)
 p = (nens = 5000000, p_rest...)
 sde = Sine(p);
 h_err = [5.0e-3, 1.0e-2, 2.0e-2, 4.0e-2, 8.0e-2]
-nsteps = 3
+nsteps = 5
 ut, err_an, err = zip(
     [local_error(sde, EulerMaruyama, err_euler, err_euler, p, h; multi_step = true, nsteps) for h in h_err]...
 ) .|> collect;
@@ -105,10 +105,11 @@ lines!(ax, h_err, err_n, label = "Absolute Sum")
 fig
 
 # %%
-p_rest = (; u0 = -2.67, σ = 1.0, k = 1.0)
+p_rest = (; u0 = -2.5, σ = 1.0, k = 1.0)
 p = (nens = 5000000, p_rest...)
+sde = Sine(p);
 h_err = [5.0e-3, 1.0e-2, 2.0e-2, 4.0e-2, 8.0e-2]
-nsteps = 3
+nsteps = 5
 ut, err_an, err = zip([local_error(sde, ABMaruyama, err_euler, err_ab, p, h; nsteps) for h in h_err]...) .|> collect;
 
 # %%
@@ -133,7 +134,7 @@ p_rest = (; u0 = 0.9, σ = 1.0, a = 1.0, b = 1.0)
 p = (nens = 5000000, p_rest...)
 sde = Phi4(p);
 h_err = [5.0e-3, 1.0e-2, 2.0e-2, 4.0e-2, 8.0e-2]
-nsteps = 3
+nsteps = 5
 ut, err_an, err = zip(
     [local_error(sde, EulerMaruyama, err_euler, err_euler, p, h; multi_step = true, nsteps) for h in h_err]...
 ) .|> collect;
@@ -151,7 +152,7 @@ p_rest = (; u0 = 0.9, σ = 1.0, a = 1.0, b = 1.0)
 p = (nens = 5000000, p_rest...)
 sde = Phi4(p);
 h_err = [5.0e-3, 1.0e-2, 2.0e-2, 4.0e-2, 8.0e-2]
-nsteps = 3
+nsteps = 5
 ut, err_an, err = zip([local_error(sde, ABMaruyama, err_euler, err_ab_less, p, h; nsteps) for h in h_err]...) .|> collect;
 
 # %%

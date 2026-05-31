@@ -167,12 +167,16 @@ function local_error(
 
     prog = Progress(p.nens)
     for n in 1:p.nens
-        reset!(int.m)
+        reset!(int_an.m)
         un_an = stepforward(int_an, sde, p.u0, draw(int_an.m, sqrth))
+
+        reset!(int.m)
         un = stepforward(int, sde, p.u0, draw(int.m, sqrth))
 
+        # First step is euler
+        err_an = err_fun1(sde, h, p, p.u0, p.u0)
+
         utmh_an, ut_an = p.u0, un_an
-        err_an = err_fun1(sde, h, p, ut_an, utmh_an)
         if multi_step
             for _ in 1:nsteps
                 err_an += err_fun2(sde, h, p, ut_an, utmh_an)
@@ -181,6 +185,7 @@ function local_error(
                 utmh_an, ut_an = ut_an, un_an
             end
         end
+
         fit!(os, (ut_an, err_an, test_f(un_an), test_f(un)))
         next!(prog)
     end
