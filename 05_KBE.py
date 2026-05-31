@@ -2,7 +2,7 @@
 # jupyter:
 #   jupytext:
 #     text_representation:
-#       extension: .jl
+#       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
 #       jupytext_version: 1.19.1
@@ -23,6 +23,7 @@ from scipy.interpolate import BarycentricInterpolator
 import matplotlib.pyplot as plt
 plt.rcParams["text.usetex"] = False
 
+
 # %%
 def smooth_step_cinf(s):
     # 0 for s <= 0, 1 for s >= 1, smoothly increases from 0 to 1 on (0,1)
@@ -32,7 +33,7 @@ def smooth_step_cinf(s):
     a, b = np.exp(-1/s[m]), np.exp(-1/(1-s[m]))
     out[m] = a / (a + b)
     return out
-
+    
 def flattenF(u, F, R1 = 0.75, R2 = 0.95):
     L = 0.5*(np.max(u) - np.min(u))
     r, R1, R2 = np.abs(u), L*R1, L*R2
@@ -40,12 +41,14 @@ def flattenF(u, F, R1 = 0.75, R2 = 0.95):
     θ = smooth_step_cinf(s)
     return (1-θ) * F(r) + θ * F(R2)
 
+
 # %%
 F = lambda u : u**2
 u = np.linspace(-10,10,128,endpoint=False)
 fig, ax = plt.subplots()
 ax.plot(u, F(u))
 ax.plot(u, flattenF(u, F))
+
 
 # %%
 def KBE(L, N, tmax, a, F, σ = 1.0, h = 5.e-4, dealias=2, flatten=True):
@@ -73,20 +76,21 @@ def KBE(L, N, tmax, a, F, σ = 1.0, h = 5.e-4, dealias=2, flatten=True):
         f['g'] = flattenF(u, F)
     else:
         f['g'] = F(u)
-
+        
     solver = problem.build_solver(d3.SBDF4)
     solver.stop_sim_time = tmax
     while solver.proceed:
         solver.step(h)
 
     f.change_scales(1)
-
+    
     return u, f, np.copy(f['g'])
 
 def evaluateF(u, f, u0):
     f0 = f(u=u0).evaluate()['g'][0]
     print(f"E[F(u(T)) | u(0)={u0}] = {f0:.10f}")
     return u0, f0
+
 
 # %%
 # Check for OU process
@@ -97,7 +101,7 @@ F = lambda u : u**2
 
 def fexact(u0, T):
     return F(u0)*np.exp(-2*T) + 0.5*(1-np.exp(-2*T))
-
+    
 u, f, fnum = KBE(5, 1024, 1.0, a, F)
 
 fig, ax = plt.subplots()

@@ -75,7 +75,7 @@ function convergence(sde, int_constructor::F, p, h_cvg, t, W, u_an) where {F}
         dW = wiener_increment_for_convergence(int.m, h, p.tmax)
 
         for (Wn, un_an) in zip(W, u_an)
-            reset!(int)
+            reset!(int.m)
             resample!(dW, t, Wn, h)
             un = simple_solve(sde, int, dW, p.u0, p.tmax)
             fit!(os, (abs(un - un_an), test_f(un), test_f(un_an)))
@@ -172,10 +172,10 @@ function local_error(
         un = stepforward(int, sde, p.u0, draw(int.m, sqrth))
 
         utmh_an, ut_an = p.u0, un_an
-        err_an = err_fun1(h, ut_an, utmh_an)
+        err_an = err_fun1(sde, h, p, ut_an, utmh_an)
         if multi_step
             for _ in 1:nsteps
-                err_an += err_fun2(h, ut_an, utmh_an)
+                err_an += err_fun2(sde, h, p, ut_an, utmh_an)
                 un_an = stepforward(int_an, sde, un_an, draw(int_an.m, sqrth))
                 un = stepforward(int, sde, un, draw(int.m, sqrth))
                 utmh_an, ut_an = ut_an, un_an
@@ -184,6 +184,6 @@ function local_error(
         fit!(os, (ut_an, err_an, test_f(un_an), test_f(un)))
         next!(prog)
     end
-    u0, err_an, avg_an, avg = (create_measurement(s) for s in os)
-    return u0, abs(err_an), abs(avg_an - avg)
+    ut, err_an, avg_an, avg = (create_measurement(s) for s in os)
+    return ut, abs(err_an), abs(avg_an - avg)
 end

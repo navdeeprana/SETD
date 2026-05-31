@@ -37,29 +37,62 @@ Random.seed!(42);
 
 # %%
 function Sine(p)
-    f(u, p) = sin(u)
-    df(u, p) = cos(u)
-    d2f(u, p) = -sin(u)
-    d3f(u, p) = -cos(u)
-    d4f(u, p) = sin(u)
+    f(u, p) = sin(p.k * u)
+    df(u, p) = p.k * cos(p.k * u)
+    d2f(u, p) = -p.k^2 * sin(p.k * u)
+    d3f(u, p) = -p.k^3 * cos(p.k * u)
+    d4f(u, p) = +p.k^4 * sin(p.k * u)
     σ = p.σ
     return AdditiveSDE(f, df, d2f, d3f, d4f, σ, p)
 end
 
+function Phi4(p)
+    f(u, p) = p.a * u - p.b * u^3
+    df(u, p) = p.a - 3 * p.b * u^2
+    d2f(u, p) = - 6 * p.b * u
+    d3f(u, p) = 0
+    d4f(u, p) = 0
+    σ = p.σ
+    return AdditiveSDE(f, df, d2f, d3f, d4f, σ, p)
+end
+
+function err_euler(sde, h, p, u0, um)
+    (; f, df, d2f, σ) = sde
+    at, dat, d2at = f(u0, p), df(u0, p), d2f(u0, p)
+    dgt, d2gt = 4 * u0^3, 12 * u0^2
+    return (
+        0.5 * h^2 * ((at * dat + 0.5 * σ^2 * d2at) * dgt + σ^2 * dat * d2gt)
+    )
+end
+
+function err_ab(sde, h, p, u0, um)
+    (; df, d2f, σ) = sde
+    dat, d2at, d2atm = df(u0, p), d2f(u0, p), d2f(um, p)
+    dgt, d2gt = 4 * u0^3, 12 * u0^2
+    return (
+        0.5 * h^2 * σ^2 * ((d2at - d2atm) * dgt + dat * d2gt)
+    )
+end
+
+function err_ab_less(sde, h, p, u0, um)
+    (; df, d2f, σ) = sde
+    dat, d2at, d2atm = df(u0, p), d2f(u0, p), d2f(um, p)
+    dgt, d2gt = 4 * u0^3, 12 * u0^2
+    return (
+        0.5 * h^2 * σ^2 * (dat * d2gt)
+    )
+end
+
 # %% [markdown]
-# # One-step error
+# # One-step error for Sine
 
 # %%
-err_euler(h, x, xm) = 6 * h^2 * x^2 * cos(x) - h^2 * x^3 * sin(x) + 2 * h^2 * x^3 * cos(x) * sin(x)
-err_ab(h, x, xm) = 6 * h^2 * x^2 * cos(x) - 2 * h^2 * x^3 * sin(x) - 2 * h^2 * x^3 * sin(xm)
-
-# %%
-p_rest = (; u0 = 2.0, σ = 1.0)
+p_rest = (; u0 = -2.5, σ = 1.0, k = 1.0)
 p = (nens = 5000000, p_rest...)
 sde = Sine(p);
-h_err = [5.0e-3, 1.0e-2, 2.0e-2, 4.0e-2, 8.0e-2, 1.6e-1]
-nsteps = 5
-u0, err_an, err = zip(
+h_err = [5.0e-3, 1.0e-2, 2.0e-2, 4.0e-2, 8.0e-2]
+nsteps = 3
+ut, err_an, err = zip(
     [local_error(sde, EulerMaruyama, err_euler, err_euler, p, h; multi_step = true, nsteps) for h in h_err]...
 ) .|> collect;
 
@@ -67,23 +100,68 @@ u0, err_an, err = zip(
 fig, ax = figax(yscale = log10, xscale = log10)
 scatterlines!(ax, h_err, err; linewidth = 3, markersize = 25, linestyle = :dash, label = "Err")
 scatterlines!(ax, h_err, err_an; linewidth = 3, markersize = 25, linestyle = :dash, label = "Err an")
-err_n = @. (nsteps + 1) * abs(err_euler(h_err, 0.5 * (u0 + p.u0), p.u0))
-lines!(ax, h_err, err_n, label = "Sum")
+err_n = [(nsteps + 1) * abs(err_euler(sde, h, p, p.u0, 0.5 * (uti + p.u0))) for (h, uti) in zip(h_err, ut)]
+lines!(ax, h_err, err_n, label = "Absolute Sum")
 fig
 
 # %%
-p_rest = (; u0 = 2.0, σ = 1.0)
+p_rest = (; u0 = -2.67, σ = 1.0, k = 1.0)
 p = (nens = 5000000, p_rest...)
-h_err = [5.0e-3, 1.0e-2, 2.0e-2, 4.0e-2, 8.0e-2, 1.6e-1]
-nsteps = 5
-u0, err_an, err = zip([local_error(sde, ABMaruyama, err_euler, err_ab, p, h; nsteps) for h in h_err]...) .|> collect;
+h_err = [5.0e-3, 1.0e-2, 2.0e-2, 4.0e-2, 8.0e-2]
+nsteps = 3
+ut, err_an, err = zip([local_error(sde, ABMaruyama, err_euler, err_ab, p, h; nsteps) for h in h_err]...) .|> collect;
 
 # %%
 fig, ax = figax(yscale = log10, xscale = log10)
 scatterlines!(ax, h_err, err; linewidth = 3, markersize = 25, linestyle = :dash, label = "Err")
 scatterlines!(ax, h_err, err_an; linewidth = 3, markersize = 25, linestyle = :dash, label = "Err an")
-err_n = @. abs(nsteps * err_ab(h_err, u0, p.u0) + err_euler(h_err, p.u0, p.u0))
-scatterlines!(ax, h_err, err_n, label = "Sum")
+# err_n = @. abs(nsteps * err_ab(h_err, p.k, u0, p.u0) + err_euler(h_err, p.k, p.u0, p.u0))
+# scatterlines!(ax, h_err, err_n, label = "Sum")
+# err_n = @. abs(nsteps * err_ab_less(h_err, p.k, u0, p.u0))
+err_n = [nsteps * abs(err_ab_less(sde, h, p, p.u0, 0.5 * (uti + p.u0))) for (h, uti) in zip(h_err, ut)]
+scatterlines!(ax, h_err, err_n, label = "Sum Less")
+err_n = [(nsteps + 1) * abs(err_euler(sde, h, p, p.u0, 0.5 * (uti + p.u0))) for (h, uti) in zip(h_err, ut)]
+lines!(ax, h_err, err_n, color = :black, label = "Euler")
+axislegend(ax, position = :rb)
+fig
+
+# %% [markdown]
+# # One-step error for Phi4
+
+# %%
+p_rest = (; u0 = 0.9, σ = 1.0, a = 1.0, b = 1.0)
+p = (nens = 5000000, p_rest...)
+sde = Phi4(p);
+h_err = [5.0e-3, 1.0e-2, 2.0e-2, 4.0e-2, 8.0e-2]
+nsteps = 3
+ut, err_an, err = zip(
+    [local_error(sde, EulerMaruyama, err_euler, err_euler, p, h; multi_step = true, nsteps) for h in h_err]...
+) .|> collect;
+
+# %%
+fig, ax = figax(yscale = log10, xscale = log10)
+scatterlines!(ax, h_err, err; linewidth = 3, markersize = 25, linestyle = :dash, label = "Err")
+scatterlines!(ax, h_err, err_an; linewidth = 3, markersize = 25, linestyle = :dash, label = "Err an")
+err_n = [(nsteps + 1) * abs(err_euler(sde, h, p, p.u0, 0.5 * (uti + p.u0))) for (h, uti) in zip(h_err, ut)]
+lines!(ax, h_err, err_n, label = "Absolute Sum")
+fig
+
+# %%
+p_rest = (; u0 = 0.9, σ = 1.0, a = 1.0, b = 1.0)
+p = (nens = 5000000, p_rest...)
+sde = Phi4(p);
+h_err = [5.0e-3, 1.0e-2, 2.0e-2, 4.0e-2, 8.0e-2]
+nsteps = 3
+ut, err_an, err = zip([local_error(sde, ABMaruyama, err_euler, err_ab_less, p, h; nsteps) for h in h_err]...) .|> collect;
+
+# %%
+fig, ax = figax(yscale = log10, xscale = log10)
+scatterlines!(ax, h_err, err; linewidth = 3, markersize = 25, linestyle = :dash, label = "Err")
+scatterlines!(ax, h_err, err_an; linewidth = 3, markersize = 25, linestyle = :dash, label = "Err an")
+err_n = [nsteps * abs(err_ab_less(sde, h, p, p.u0, 0.5 * (uti + p.u0))) for (h, uti) in zip(h_err, ut)]
+scatterlines!(ax, h_err, err_n, label = "Sum Less")
+err_n = [(nsteps + 1) * abs(err_euler(sde, h, p, p.u0, 0.5 * (uti + p.u0))) for (h, uti) in zip(h_err, ut)]
+lines!(ax, h_err, err_n, color = :black, label = "Euler")
 axislegend(ax, position = :rb)
 fig
 
