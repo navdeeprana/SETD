@@ -15,6 +15,7 @@ struct EulerMaruyama <: AbstractNumericalMethod end
 struct Milstein <: AbstractNumericalMethod end
 struct StrongOrder15 <: AbstractNumericalMethod end
 struct WeakOrder20 <: AbstractNumericalMethod end
+struct BrokenWeakOrder20 <: AbstractNumericalMethod end
 struct WeakOrder30 <: AbstractNumericalMethod end
 
 mutable struct ABMaruyama{T} <: AbstractNumericalMethod
@@ -50,6 +51,7 @@ Milstein(h) = Integrator(Milstein(), (; h))
 
 StrongOrder15(h) = Integrator(StrongOrder15(), (; h, f1 = 0.5 * h, f2 = (0.5 / sqrt(3)) * h^(3 / 2)))
 WeakOrder20(h) = Integrator(WeakOrder20(), (; h))
+BrokenWeakOrder20(h) = Integrator(BrokenWeakOrder20(), (; h))
 WeakOrder30(h) = Integrator(WeakOrder30(), (; h))
 
 ABMaruyama(h) = Integrator(ABMaruyama(true, 0.0), (; h))
@@ -169,6 +171,15 @@ function stepforward(m::WeakOrder20, q, s::AdditiveSDE, u0, dW)
     h, a, da, d2a = q.h, f(u0, p), df(u0, p), d2f(u0, p)
     return (
         u0 + h * a + σ * (1 + 0.5 * h * da) * dW
+            + 0.5 * h^2 * (a * da + 0.5 * σ^2 * d2a)
+    )
+end
+
+function stepforward(m::BrokenWeakOrder20, q, s::AdditiveSDE, u0, dW)
+    (; p, f, df, d2f, σ) = s
+    h, a, da, d2a = q.h, f(u0, p), df(u0, p), d2f(u0, p)
+    return (
+        u0 + h * a + σ * dW
             + 0.5 * h^2 * (a * da + 0.5 * σ^2 * d2a)
     )
 end

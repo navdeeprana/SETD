@@ -50,79 +50,113 @@ function Phi4(p)
     f(u, p) = p.a * u - p.b * u^3
     df(u, p) = p.a - 3 * p.b * u^2
     d2f(u, p) = - 6 * p.b * u
-    d3f(u, p) = 0
+    d3f(u, p) = - 6 * p.b
     d4f(u, p) = 0
     σ = p.σ
     return AdditiveSDE(f, df, d2f, d3f, d4f, σ, p)
-end
-
-function err_euler(sde, h, p, u0, um)
-    (; f, df, d2f, σ) = sde
-    at, dat, d2at = f(u0, p), df(u0, p), d2f(u0, p)
-    dgt, d2gt = 4 * u0^3, 12 * u0^2
-    return (
-        0.5 * h^2 * ((at * dat + 0.5 * σ^2 * d2at) * dgt + σ^2 * dat * d2gt)
-    )
-end
-
-function err_ab(sde, h, p, u0, um)
-    (; df, d2f, σ) = sde
-    dat, d2at, d2atm = df(u0, p), d2f(u0, p), d2f(um, p)
-    dgt, d2gt = 4 * u0^3, 12 * u0^2
-    return (
-        0.5 * h^2 * σ^2 * ((d2at - d2atm) * dgt + dat * d2gt)
-    )
-end
-
-function err_ab_less(sde, h, p, u0, um)
-    (; df, d2f, σ) = sde
-    dat, d2at, d2atm = df(u0, p), d2f(u0, p), d2f(um, p)
-    dgt, d2gt = 4 * u0^3, 12 * u0^2
-    return (
-        0.5 * h^2 * σ^2 * (dat * d2gt)
-    )
 end
 
 # %% [markdown]
 # # One-step error for Sine
 
 # %%
-p_rest = (; u0 = -2.5, σ = 1.0, k = 1.0)
-p = (nens = 5000000, p_rest...)
+h_err = [5.0e-3, 1.0e-2, 2.0e-2, 4.0e-2, 8.0e-2];
+nens_err = [51200000, 12800000, 12800000, 12800000, 6400000];
+var_err = zip(h_err, nens_err)
+
+# %%
+p = (; u0 = -2.5, σ = 1.0, k = 1.0)
 sde = Sine(p);
-h_err = [5.0e-3, 1.0e-2, 2.0e-2, 4.0e-2, 8.0e-2]
-nsteps = 5
+nsteps = 4
+test_func = test_atan()
 ut, err_an, err = zip(
-    [local_error(sde, EulerMaruyama, err_euler, err_euler, p, h; multi_step = true, nsteps) for h in h_err]...
+    [local_error(sde, EulerMaruyama, test_func, p, h, nens; nsteps) for (h, nens) in var_err]...
 ) .|> collect;
 
 # %%
 fig, ax = figax(yscale = log10, xscale = log10)
 scatterlines!(ax, h_err, err; linewidth = 3, markersize = 25, linestyle = :dash, label = "Err")
 scatterlines!(ax, h_err, err_an; linewidth = 3, markersize = 25, linestyle = :dash, label = "Err an")
-err_n = [(nsteps + 1) * abs(err_euler(sde, h, p, p.u0, 0.5 * (uti + p.u0))) for (h, uti) in zip(h_err, ut)]
+err_n = [nsteps_error(EulerMaruyama(), sde, h, p, uti, test_func, nsteps) for (h, uti) in zip(h_err, ut)]
 lines!(ax, h_err, err_n, label = "Absolute Sum")
 fig
 
 # %%
-p_rest = (; u0 = -2.5, σ = 1.0, k = 1.0)
-p = (nens = 5000000, p_rest...)
 sde = Sine(p);
-h_err = [5.0e-3, 1.0e-2, 2.0e-2, 4.0e-2, 8.0e-2]
-nsteps = 5
-ut, err_an, err = zip([local_error(sde, ABMaruyama, err_euler, err_ab, p, h; nsteps) for h in h_err]...) .|> collect;
+nsteps = 4
+test_func = test_atan()
+ut, err_an, err = zip(
+    [local_error(sde, BrokenWeakOrder20, test_func, p, h, nens; nsteps) for (h, nens) in var_err]...
+) .|> collect;
 
 # %%
 fig, ax = figax(yscale = log10, xscale = log10)
 scatterlines!(ax, h_err, err; linewidth = 3, markersize = 25, linestyle = :dash, label = "Err")
 scatterlines!(ax, h_err, err_an; linewidth = 3, markersize = 25, linestyle = :dash, label = "Err an")
-# err_n = @. abs(nsteps * err_ab(h_err, p.k, u0, p.u0) + err_euler(h_err, p.k, p.u0, p.u0))
-# scatterlines!(ax, h_err, err_n, label = "Sum")
-# err_n = @. abs(nsteps * err_ab_less(h_err, p.k, u0, p.u0))
-err_n = [nsteps * abs(err_ab_less(sde, h, p, p.u0, 0.5 * (uti + p.u0))) for (h, uti) in zip(h_err, ut)]
-scatterlines!(ax, h_err, err_n, label = "Sum Less")
-err_n = [(nsteps + 1) * abs(err_euler(sde, h, p, p.u0, 0.5 * (uti + p.u0))) for (h, uti) in zip(h_err, ut)]
-lines!(ax, h_err, err_n, color = :black, label = "Euler")
+err_n = [nsteps_error(BrokenWeakOrder20(), sde, h, p, uti, test_func, nsteps) for (h, uti) in zip(h_err, ut)]
+lines!(ax, h_err, err_n, label = "Sum Less")
+axislegend(ax, position = :rb)
+fig
+
+# %%
+sde = Sine(p);
+nsteps = 6
+test_func = test_atan()
+ut, err_an, err = zip(
+    [local_error(sde, ABMaruyama, test_func, p, h, nens; nsteps) for (h, nens) in var_err]...
+) .|> collect;
+
+# %%
+fig, ax = figax(yscale = log10, xscale = log10)
+scatterlines!(ax, h_err, err; linewidth = 3, markersize = 25, linestyle = :dash, label = "Err")
+scatterlines!(ax, h_err, err_an; linewidth = 3, markersize = 25, linestyle = :dash, label = "Err an")
+err_n = [nsteps_error(ABMaruyama(1.0e-1).m, sde, h, p, uti, test_func, nsteps) for (h, uti) in zip(h_err, ut)]
+lines!(ax, h_err, err_n, label = "Sum Less")
+axislegend(ax, position = :rb)
+fig
+
+# %%
+p_rest = (; u0 = -2.5, σ = 1.0, k = 1.0)
+h = 2.0e-2
+p = (nens = 10000000, p_rest...)
+sde = Sine(p);
+step_range = 1:1:6
+ut, err_an, err = zip([local_error(sde, EulerMaruyama, err_euler, err_euler, test_func, p, h; nsteps) for nsteps in step_range]...) .|> collect;
+# ut, err_an, err = zip(tmap(step_range) do nsteps
+#         show_progress = nsteps == maximum(step_range)
+#         local_error(sde, EulerMaruyama, err_euler, err_euler, test_func, p, h; nsteps, show_progress)
+#     end...) .|> collect
+
+# %%
+x = step_range
+fig, ax = figax(yscale = log10)
+scatterlines!(ax, x, err; linewidth = 3, markersize = 25, linestyle = :dash, label = "Err")
+scatterlines!(ax, x, err_an; linewidth = 3, markersize = 25, linestyle = :dash, label = "Err an")
+err_n = [err_euler_nstep(sde, h, p, uti, test_func, nsteps) for (nsteps, uti) in zip(x, ut)]
+lines!(ax, x, err_n, label = "Sum Less")
+axislegend(ax, position = :rb)
+fig
+
+# %%
+Random.seed!(42)
+p_rest = (; u0 = -2.5, σ = 1.0, k = 1.0)
+h = 2.0e-2
+p = (nens = 10000000, p_rest...)
+sde = Sine(p);
+step_range = 1:1:6
+ut, err_an, err = zip([local_error(sde, ABMaruyama, err_euler, err_ab, test_func, p, h; nsteps) for nsteps in step_range]...) .|> collect;
+# ut, err_an, err = zip(tmap(step_range) do nsteps
+#         show_progress = nsteps == maximum(step_range)
+#         local_error(sde, ABMaruyama, err_euler, err_ab, test_func, p, h; nsteps, show_progress)
+#     end...) .|> collect
+
+# %%
+x = step_range
+fig, ax = figax(yscale = log10)
+scatterlines!(ax, x, err; linewidth = 3, markersize = 25, linestyle = :dash, label = "Err")
+scatterlines!(ax, x, err_an; linewidth = 3, markersize = 25, linestyle = :dash, label = "Err an")
+err_n = [err_ab_nstep(sde, h, p, uti, test_func, nsteps) for (nsteps, uti) in zip(x, ut)]
+lines!(ax, x, err_n, label = "Sum Less")
 axislegend(ax, position = :rb)
 fig
 
@@ -133,17 +167,16 @@ fig
 p_rest = (; u0 = 0.9, σ = 1.0, a = 1.0, b = 1.0)
 p = (nens = 5000000, p_rest...)
 sde = Phi4(p);
-h_err = [5.0e-3, 1.0e-2, 2.0e-2, 4.0e-2, 8.0e-2]
-nsteps = 5
+nsteps = 3
 ut, err_an, err = zip(
-    [local_error(sde, EulerMaruyama, err_euler, err_euler, p, h; multi_step = true, nsteps) for h in h_err]...
+    [local_error(sde, EulerMaruyama, err_euler, err_euler, test_func, p, h; nsteps) for h in h_err]...
 ) .|> collect;
 
 # %%
 fig, ax = figax(yscale = log10, xscale = log10)
 scatterlines!(ax, h_err, err; linewidth = 3, markersize = 25, linestyle = :dash, label = "Err")
 scatterlines!(ax, h_err, err_an; linewidth = 3, markersize = 25, linestyle = :dash, label = "Err an")
-err_n = [(nsteps + 1) * abs(err_euler(sde, h, p, p.u0, 0.5 * (uti + p.u0))) for (h, uti) in zip(h_err, ut)]
+err_n = [(nsteps + 1) * abs(err_euler(sde, h, p, p.u0, 0.5 * (uti + p.u0), test_func)) for (h, uti) in zip(h_err, ut)]
 lines!(ax, h_err, err_n, label = "Absolute Sum")
 fig
 
@@ -151,18 +184,15 @@ fig
 p_rest = (; u0 = 0.9, σ = 1.0, a = 1.0, b = 1.0)
 p = (nens = 5000000, p_rest...)
 sde = Phi4(p);
-h_err = [5.0e-3, 1.0e-2, 2.0e-2, 4.0e-2, 8.0e-2]
 nsteps = 5
-ut, err_an, err = zip([local_error(sde, ABMaruyama, err_euler, err_ab_less, p, h; nsteps) for h in h_err]...) .|> collect;
+ut, err_an, err = zip([local_error(sde, ABMaruyama, err_euler, err_ab, test_func, p, h; nsteps) for h in h_err]...) .|> collect;
 
 # %%
 fig, ax = figax(yscale = log10, xscale = log10)
 scatterlines!(ax, h_err, err; linewidth = 3, markersize = 25, linestyle = :dash, label = "Err")
 scatterlines!(ax, h_err, err_an; linewidth = 3, markersize = 25, linestyle = :dash, label = "Err an")
-err_n = [nsteps * abs(err_ab_less(sde, h, p, p.u0, 0.5 * (uti + p.u0))) for (h, uti) in zip(h_err, ut)]
+err_n = [err_ab_nstep(sde, h, p, uti, test_func, nsteps) for (h, uti) in zip(h_err, ut)]
 scatterlines!(ax, h_err, err_n, label = "Sum Less")
-err_n = [(nsteps + 1) * abs(err_euler(sde, h, p, p.u0, 0.5 * (uti + p.u0))) for (h, uti) in zip(h_err, ut)]
-lines!(ax, h_err, err_n, color = :black, label = "Euler")
 axislegend(ax, position = :rb)
 fig
 
@@ -171,13 +201,14 @@ fig
 
 # %%
 h_cvg = @. 1 / 2^(3:6)
-p_rest = (; u0 = 0.5, tmax = 1.0, σ = 1.0)
+p_rest = (; u0 = 0.5, tmax = 1.0, σ = 1.0, k = 1.0)
 p = (nens = 50000, p_rest...)
+test_func = test_atan()
 sde = Sine(p);
 
 # %%
 t, W, u_an = solve_for_convergence(sde, StrongOrder15, p, h_cvg; noise_scale = 4, h_exact_scale = 32, return_noise_scale = 1);
-@time cvg_so = convergence(sde, StrongOrder15, p, h_cvg, t, W, u_an);
+@time cvg_so = convergence(sde, StrongOrder15, test_func, p, h_cvg, t, W, u_an);
 
 # %%
 fig, axes = figax(nx = 2, ny = 1, xscale = log2, yscale = log10, s = 130, xlabel = L"h")
@@ -194,8 +225,8 @@ fig
 
 # %%
 h_cvg = @. 1 / 2^(3:6)
-p_rest = (; u0 = 0.5, tmax = 1.0, σ = 1.0)
-p = (nens = 500000, p_rest...)
+p_rest = (; u0 = 0.5, tmax = 1.0, σ = 1.0, k = 1.0)
+p = (nens = 1000000, p_rest...)
 sde = Sine(p);
 
 # %%
@@ -209,9 +240,9 @@ lines(P.x, P.P)
 
 # %%
 @time cvg = (
-    em = convergence(sde, EulerMaruyama, p, h_cvg, t, W, u_an),
-    ab = convergence(sde, ABMaruyama, p, h_cvg, t, W, u_an),
-    wo = convergence(sde, WeakOrder20, p, h_cvg, t, W, u_an),
+    em = convergence(sde, EulerMaruyama, test_func, p, h_cvg, t, W, u_an),
+    ab = convergence(sde, ABMaruyama, test_func, p, h_cvg, t, W, u_an),
+    wo = convergence(sde, WeakOrder20, test_func, p, h_cvg, t, W, u_an),
 );
 
 # %%
@@ -238,35 +269,33 @@ fit_and_plot(axes[1], cvg.wo, :es, colors[3])
 fit_and_plot(axes[2], cvg.wo, :ew, colors[3])
 
 axislegend.(axes, position = :rb, nbanks = 4)
-# save("Sine.png", fig)
+save("Sine.png", fig)
 resize_to_layout!(fig)
 fig
 
-# %%
-function Phi4(p)
-    f(u, p) = p.a * u - p.b * u^3
-    df(u, p) = p.a - 3 * p.b * u^2
-    d2f(u, p) = - 6 * p.b * u
-    d3f(u, p) = 0
-    d4f(u, p) = 0
-    σ = p.σ
-    return AdditiveSDE(f, df, d2f, d3f, d4f, σ, p)
-end
+# %% [markdown]
+# # Phi4
 
 # %%
-h_cvg = @. 1 / 2^(3:6)
-p_rest = (; u0 = 0.5, tmax = 1.0, a = 0.1, b = 0.2, σ = 1.0)
-p = (nens = 500000, p_rest...)
+h_cvg = @. 1 / 2^(5:8)
+p_rest = (; u0 = 0.9, tmax = 0.125, a = 1.0, b = 0.5, σ = 1.0)
+p = (nens = 1000000, p_rest...)
+test_func = test_atan();
 sde = Phi4(p);
 
 # %%
 t, W, u_an = solve_for_convergence(sde, StrongOrder15, p, h_cvg; noise_scale = 4, h_exact_scale = 32, return_noise_scale = 128);
 
 # %%
+@show extrema(u_an)
+P = pdf(u_an, -5:0.1:5)
+lines(P.x, P.P)
+
+# %%
 @time cvg = (
-    em = convergence(sde, EulerMaruyama, p, h_cvg, t, W, u_an),
-    ab = convergence(sde, ABMaruyama, p, h_cvg, t, W, u_an),
-    wo = convergence(sde, WeakOrder20, p, h_cvg, t, W, u_an),
+    em = convergence(sde, EulerMaruyama, test_func, p, h_cvg, t, W, u_an),
+    ab = convergence(sde, ABMaruyama, test_func, p, h_cvg, t, W, u_an),
+    wo = convergence(sde, WeakOrder20, test_func, p, h_cvg, t, W, u_an),
 );
 
 # %%
@@ -289,7 +318,7 @@ fit_and_plot(axes[1], cvg.wo, :es, colors[3])
 fit_and_plot(axes[2], cvg.wo, :ew, colors[3])
 
 axislegend.(axes, position = :rb)
-# save("Phi4.png", fig)
+save("Phi4.png", fig)
 resize_to_layout!(fig)
 fig
 
@@ -298,24 +327,31 @@ fig
 
 # %%
 h_cvg = @. 1 / 2^(2:5)
-p_rest = (; u0 = 0.5, tmax = 1.0, σ = 1.0)
-p = (nens = 50000000, p_rest...)
+p_rest = (; u0 = 0.5, tmax = 0.25, σ = 1.0, k = 1.0)
+p = (nens = 10000000, p_rest...)
 sde = Sine(p);
+test_func = test_atan();
 
-# scale = 64
-# h_small = minimum(h_cvg) / scale
-# stats_an = solve_for_weak_convergence(sde, WeakOrder30, TwoPointWienerIncrement, p, h_small);
+scale = 64
+h_small = minimum(h_cvg) / scale
+stats_an = solve_for_weak_convergence(sde, WeakOrder30, TwoPointWienerIncrement, test_func, (nens = 1000000, p_rest...), h_small);
+stats_an
 
 # %%
-stats_th = measurement(14.5488017, 0.000006)
+# For test function u^4, u0=0.5, sine
+# stats_th = measurement(14.5488017, 0.000006)
+# For test function atan(u)^2, u0=0.5, sine
+# stats_th = measurement(0.80535759, 0.00000010)
+# For test function atan(u)^2, u0=0.5, sine, tmax = 0.125
+stats_th = measurement(0.38827177, 0.00001)
 
 # %%
 stats_ch = stats_th
 weak = (
-    em = weak_convergence(sde, EulerMaruyama, SampledWienerIncrement, p, h_cvg, stats_ch),
-    ab = weak_convergence(sde, ABMaruyama, SampledWienerIncrement, p, h_cvg, stats_ch),
-    ab2 = weak_convergence(sde, ABMaruyama, SampledWienerIncrement, p, h_cvg, stats_ch; anti = true),
-    wo = weak_convergence(sde, WeakOrder20, SampledWienerIncrement, p, h_cvg, stats_ch),
+    # em = weak_convergence(sde, EulerMaruyama, SampledWienerIncrement, p, h_cvg, stats_ch),
+    ab = weak_convergence(sde, ABMaruyama, SampledWienerIncrement, test_func, p, h_cvg, stats_ch),
+    wo = weak_convergence(sde, WeakOrder20, SampledWienerIncrement, test_func, p, h_cvg, stats_ch),
+    wo3 = weak_convergence(sde, WeakOrder30, TwoPointWienerIncrement, test_func, p, h_cvg, stats_ch),
 );
 
 # %%
@@ -324,36 +360,66 @@ weak = (
 
 # %%
 fig, ax = figax(nx = 1, ny = 1, xscale = log2, yscale = log10, s = 130, xlabel = L"h")
-plot_weak_convergence(ax, weak.em; label = "EM")
+# plot_weak_convergence(ax, weak.em; label = "EM")
 plot_weak_convergence(ax, weak.ab; label = "AB")
-plot_weak_convergence(ax, weak.ab2; label = "AB2")
+# plot_weak_convergence(ax, weak.ab2; label = "AB2")
 plot_weak_convergence(ax, weak.wo; label = "WO20")
+plot_weak_convergence(ax, weak.wo3; label = "WO30")
 lines!(ax, h_cvg, (@. 2 * h_cvg^1), linewidth = 3, color = :black)
 lines!(ax, h_cvg, (@. 4 * h_cvg^2), linewidth = 3, color = :black)
 axislegend(ax, position = :rb)
-save("Sine_Weak_5e7.pdf", fig)
+# save("Sine_Weak_5e7.pdf", fig)
 fig
 
 # %%
-weak.ab
+function ito_taylor(sde, test_func, p, h, un, dW; sign = 1)
+    f, σ = sde.f, p.σ
+    (; g, dg, d2g) = test_func
+    fn, gn, dgn, d2gn = f(un, p), g(un), dg(un), d2g(un)
+    return (
+        gn + sign * (h * fn + σ * dW) * dgn + 0.5 * σ^2 * dW^2 * d2gn
+    )
+end
 
-# %%
-h_cvg = @. 1 / 2^(3:4)
-p_rest = (; u0 = 0.5, tmax = 1.0, σ = 1.0)
-sde = Sine(p);
-
-nens_val = [1000, 10000, 100000, 1000000]
-err = Measurement{Float64}[]
-@showprogress for nens in nens_val
-    p = (; nens, p_rest...)
-    cvg = weak_convergence(sde, WeakOrder20, SampledWienerIncrement, p, h_cvg, stats_ch)
-    push!(err, cvg.ew[end])
+function ito_taylor_full(sde, test_func, p, h, un, du; sign = 1)
+    f, σ = sde.f, p.σ
+    (; g, dg, d2g) = test_func
+    gn, dgn, d2gn = g(un), dg(un), d2g(un)
+    return (
+        gn + sign * du * dgn + 0.5 * du^2 * d2gn
+    )
 end
 
 # %%
-fig, ax = figax(yscale = log10, xscale = log10)
-scatterlines!(ax, nens_val, Measurements.uncertainty.(err))
-scatterlines!(ax, nens_val, (@. 30 / sqrt(nens_val)))
-fig
+# Ito-Taylor expansion
+h = 1.0e-4
+p = (; u0 = 0.2, σ = 1.0, k = 1.0)
+sde = Sine(p);
+# test_func = test_poly(3);
+test_func = test_atan();
+
+int = EulerMaruyama(h)
+dW = sqrt(h) * randn()
+un = stepforward(int, sde, p.u0, dW)
+
+ftrue = test_func.g(p.u0), test_func.g(un)
+
+# %%
+e1 = ito_taylor(sde, test_func, p, h, p.u0, dW)
+e2 = ito_taylor(sde, test_func, p, h, un, dW; sign = -1)
+fito = (e2, e1)
+
+# %%
+du = un - p.u0
+e1 = ito_taylor_full(sde, test_func, p, h, p.u0, du)
+e2 = ito_taylor_full(sde, test_func, p, h, un, du; sign = -1)
+ffull = (e2, e1)
+
+# %%
+@. abs(fito - ftrue) |> println
+@. abs(ffull - ftrue) |> println
+
+# %%
+h^(3 / 2), h^2
 
 # %%
