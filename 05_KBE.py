@@ -5,7 +5,7 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.19.1
+#       jupytext_version: 1.19.6
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
@@ -89,7 +89,7 @@ def KBE(L, N, tmax, a, F, σ = 1.0, h = 5.e-4, dealias=2, flatten=True):
 def evaluateF(u, f, u0):
     f0 = f(u=u0).evaluate()['g'][0]
     print(f"E[F(u(T)) | u(0)={u0}] = {f0:.10f}")
-    return u0, f0
+    return f0
 
 
 # %%
@@ -111,48 +111,51 @@ ax.plot(u, fexact(u, 1.0), label="Analytical")
 ax.legend()
 
 # %%
+# Check for OU with varying time step
 u, f, fnum = KBE(5, 256, 1.0, a, F)
-u0, F0 = evaluateF(u, f, 0.5)
+F0 = evaluateF(u, f, u0)
+print(fexact(u0, 1.0) - F0)
+# h = 1.e-4
+u, f, fnum = KBE(5, 256, 1.0, a, F, h=1.e-4)
+F0 = evaluateF(u, f, u0)
 print(fexact(u0, 1.0) - F0)
 
-# %%
-u, f, fnum = KBE(5, 256, 1.0, a, F, h=1.e-4)
-u0, F0 = evaluateF(u, f, 0.5)
-print(fexact(u0, 1.0) - F0)
+# %% [markdown]
+# # Sine
 
 # %%
 # du = sin(u) dt + σ dW
-# F(u) = u**4
-L, n, tmax = 10, 1024, 1.0
+L, n, tmax = 10, 1024, 0.25
+u0 = 0.5
 
 a = lambda u : np.sin(u)
-F = lambda u : u**4
+F = lambda u : np.atan(u)**2
 
 # %%
 fig, ax = plt.subplots()
-ax.set(xlabel="x", ylabel = "<x^4>", yscale="log")
-u, f, fnum = KBE(10, 1024, 1.0, a, F)
+ax.set(xlabel="x", ylabel = "test_func", yscale="log")
+u, f, fnum = KBE(10, 1024, tmax, a, F)
 ax.plot(u, fnum, label="KBE")
-u, f, fnum = KBE(20, 2048, 1.0, a, F)
+u, f, fnum = KBE(20, 2048, tmax, a, F)
 ax.plot(u, fnum, label="KBE")
 ax.legend()
 
 # %%
 for L, N in zip([5,5,5,5], [32,64,128,256]):
     print(f"L={L}, N={N}")
-    u, f, fnum = KBE(L, N, 1.0, a, F, h=2.e-4)
-    u0, F0 = evaluateF(u, f, 0.5)
+    u, f, fnum = KBE(L, N, tmax, a, F, h=2.e-4)
+    F0 = evaluateF(u, f, u0)
     print(f"------------")
 
 # %%
 # With flattening
-L, N, tmax = 40, 1024, 1.0
+L, N = 40, 1024
 hval = [8.e-4, 4.e-4, 2.e-4, 1.e-4, 5.e-5]
 f0val = []
 for h in hval:
     print(f"h={h}")
     u, f, fnum = KBE(L, N, tmax, a, F, h = h)
-    u0, F0 = evaluateF(u, f, 0.5)
+    F0 = evaluateF(u, f, u0)
     f0val.append(F0)
     print(f"------------")
 
@@ -162,16 +165,59 @@ f0val = np.asarray(f0val)
 
 # %%
 # Without flattening
-L, N, tmax = 40, 1024, 1.0
+L, N = 40, 1024
 hval = [8.e-4, 4.e-4, 2.e-4, 1.e-4, 5.e-5]
 f0val = []
 for h in hval:
     print(f"h={h}")
     u, f, fnum = KBE(L, N, tmax, a, F, h = h, flatten=False)
-    u0, F0 = evaluateF(u, f, 0.5)
+    F0 = evaluateF(u, f, u0)
     f0val.append(F0)
     print(f"------------")
 
 # %%
 f0val = np.asarray(f0val)
 2*f0val[1:]-f0val[:-1]
+
+# %%
+# du = (u-u^3) dt + σ dW
+L, N, tmax = 5, 1024, 1.0
+
+a = lambda u : u - u**3
+F = lambda u : np.atan(u)**2
+
+# %%
+fig, ax = plt.subplots()
+ax.set(xlabel="x", ylabel = "<f>", yscale="log")
+u, f, fnum = KBE(L, N, tmax, a, F)
+ax.plot(u, fnum, label="KBE")
+ax.legend()
+
+# %%
+# With flattening
+L, N = 5, 1024
+hval = [8.e-4, 4.e-4, 2.e-4, 1.e-4, 5.e-5]
+f0val = []
+for h in hval:
+    print(f"h={h}")
+    u, f, fnum = KBE(L, N, tmax, a, F, h = h)
+    F0 = evaluateF(u, f, u0)
+    f0val.append(F0)
+    print(f"------------")
+
+# %%
+f0val = np.asarray(f0val)
+2*f0val[1:]-f0val[:-1]
+
+# %%
+L, N = 5, 1024
+hval = [8.e-4, 4.e-4, 2.e-4, 1.e-4, 5.e-5]
+f0val = []
+for h in hval:
+    print(f"h={h}")
+    u, f, fnum = KBE(L, N, tmax, a, F, h = h, flatten=False)
+    F0 = evaluateF(u, f, u0)
+    f0val.append(F0)
+    print(f"------------")
+
+# %%
