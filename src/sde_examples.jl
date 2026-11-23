@@ -33,3 +33,27 @@ gbm_analytical(x0, a, b, t, W) = x0 * exp((a - b^2 / 2) * t + b * W)
 gbm_analytical(a, b, t, W) = gbm_analytical(1, a, b, t, W)
 
 gbm_var(x0, a, b, t) = x0^2 * exp(2 * a * t) * (exp(b^2 * t) - 1)
+
+## Additive SDES ##
+
+# du = sin(ku) dt + σ dW(t)
+function Sine(p)
+    f(u, p) = sin(p.k * u)
+    df(u, p) = p.k * cos(p.k * u)
+    d2f(u, p) = -p.k^2 * sin(p.k * u)
+    d3f(u, p) = -p.k^3 * cos(p.k * u)
+    d4f(u, p) = +p.k^4 * sin(p.k * u)
+    σ = p.σ
+    return AdditiveSDE(f, df, d2f, d3f, d4f, σ, p)
+end
+
+# du = (au-bu^3) dt + σ dW(t)
+function Phi4(p)
+    f(u, p) = p.a * u - p.b * u^3
+    df(u, p) = p.a - 3 * p.b * u^2
+    d2f(u, p) = - 6 * p.b * u
+    d3f(u, p) = - 6 * p.b
+    d4f(u, p) = 0
+    σ = p.σ
+    return AdditiveSDE(f, df, d2f, d3f, d4f, σ, p)
+end

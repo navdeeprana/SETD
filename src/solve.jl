@@ -23,6 +23,8 @@ mutable struct ABMaruyama{T} <: AbstractNumericalMethod
     fprev::T
 end
 
+ABMaruyama() = ABMaruyama(true, 0.0)
+
 # Stochastic Exponential Time Differening (SETD) methods
 struct SETDEulerMaruyama <: AbstractNumericalMethod end
 struct SETDMilstein <: AbstractNumericalMethod end
@@ -32,6 +34,8 @@ mutable struct SETD2{T} <: AbstractNumericalMethod
     first_step::Bool
     fprev::T
 end
+
+SETD2() = SETD2(true, 0.0)
 
 # Integrating Factor (IF) methods
 struct IFEulerMaruyama <: AbstractNumericalMethod end

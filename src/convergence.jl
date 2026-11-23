@@ -86,7 +86,7 @@ end
 function convergence(sde, int_constructor::F1, test_func::F2, p, h_cvg, t, W, u_an) where {F1, F2}
     cvg = (; h = Float64[], es = Measurement{Float64}[], ew = Measurement{Float64}[])
 
-    func = test_func.h
+    func = test_func.g
 
     @showprogress desc = "Convergence" for h in h_cvg
         os = OnlineStats.Group(meanvar(), meanvar(), meanvar())
@@ -186,9 +186,6 @@ function theoretical_error(::EulerMaruyama, sde, h, p, u0, um, test_func::F) whe
 end
 
 function theoretical_error(int::ABMaruyama, sde, h, p, u0, um, test_func::F) where {F}
-    if int.first_step == true
-        return theoretical_error(EulerMaruyama(), sde, h, p, u0, um, test_func)
-    end
     (; df, d2f, σ) = sde
     dat, d2at, d2atm = df(u0, p), d2f(u0, p), d2f(um, p)
     dgt, d2gt = test_func.dg(u0), test_func.d2g(u0)
@@ -220,7 +217,7 @@ function nsteps_error(m::ABMaruyama, sde, h, p, uf, test_func, nsteps)
 end
 
 function local_error(
-        sde, int_constructor::F1, test_func::F2, p, h, nens; nsteps = 5, show_progress = true,
+        sde, int_constructor::F1, test_func::F2, p, h; nens = p.nens, nsteps = 5, show_progress = true,
     ) where {F1, F2}
 
     func = test_func.g

@@ -8,9 +8,9 @@
 #       format_version: '1.3'
 #       jupytext_version: 1.19.6
 #   kernelspec:
-#     display_name: Julia 1.10
+#     display_name: Julia 1.13
 #     language: julia
-#     name: julia-1.10
+#     name: julia-1.13
 # ---
 
 # %%
@@ -34,170 +34,6 @@ Random.seed!(42);
 
 # %% [markdown]
 # # Convergence for Additive SDEs
-
-# %%
-function Sine(p)
-    f(u, p) = sin(p.k * u)
-    df(u, p) = p.k * cos(p.k * u)
-    d2f(u, p) = -p.k^2 * sin(p.k * u)
-    d3f(u, p) = -p.k^3 * cos(p.k * u)
-    d4f(u, p) = +p.k^4 * sin(p.k * u)
-    σ = p.σ
-    return AdditiveSDE(f, df, d2f, d3f, d4f, σ, p)
-end
-
-function Phi4(p)
-    f(u, p) = p.a * u - p.b * u^3
-    df(u, p) = p.a - 3 * p.b * u^2
-    d2f(u, p) = - 6 * p.b * u
-    d3f(u, p) = - 6 * p.b
-    d4f(u, p) = 0
-    σ = p.σ
-    return AdditiveSDE(f, df, d2f, d3f, d4f, σ, p)
-end
-
-# %% [markdown]
-# # One-step error for Sine
-
-# %%
-h_err = [5.0e-3, 1.0e-2, 2.0e-2, 4.0e-2, 8.0e-2];
-nens_err = [51200000, 12800000, 12800000, 12800000, 6400000];
-var_err = zip(h_err, nens_err)
-
-# %%
-p = (; u0 = -2.5, σ = 1.0, k = 1.0)
-sde = Sine(p);
-nsteps = 4
-test_func = test_atan()
-ut, err_an, err = zip(
-    [local_error(sde, EulerMaruyama, test_func, p, h, nens; nsteps) for (h, nens) in var_err]...
-) .|> collect;
-
-# %%
-fig, ax = figax(yscale = log10, xscale = log10)
-scatterlines!(ax, h_err, err; linewidth = 3, markersize = 25, linestyle = :dash, label = "Err")
-scatterlines!(ax, h_err, err_an; linewidth = 3, markersize = 25, linestyle = :dash, label = "Err an")
-err_n = [nsteps_error(EulerMaruyama(), sde, h, p, uti, test_func, nsteps) for (h, uti) in zip(h_err, ut)]
-lines!(ax, h_err, err_n, label = "Absolute Sum")
-fig
-
-# %%
-sde = Sine(p);
-nsteps = 4
-test_func = test_atan()
-ut, err_an, err = zip(
-    [local_error(sde, BrokenWeakOrder20, test_func, p, h, nens; nsteps) for (h, nens) in var_err]...
-) .|> collect;
-
-# %%
-fig, ax = figax(yscale = log10, xscale = log10)
-scatterlines!(ax, h_err, err; linewidth = 3, markersize = 25, linestyle = :dash, label = "Err")
-scatterlines!(ax, h_err, err_an; linewidth = 3, markersize = 25, linestyle = :dash, label = "Err an")
-err_n = [nsteps_error(BrokenWeakOrder20(), sde, h, p, uti, test_func, nsteps) for (h, uti) in zip(h_err, ut)]
-lines!(ax, h_err, err_n, label = "Sum Less")
-axislegend(ax, position = :rb)
-fig
-
-# %%
-sde = Sine(p);
-nsteps = 6
-test_func = test_atan()
-ut, err_an, err = zip(
-    [local_error(sde, ABMaruyama, test_func, p, h, nens; nsteps) for (h, nens) in var_err]...
-) .|> collect;
-
-# %%
-fig, ax = figax(yscale = log10, xscale = log10)
-scatterlines!(ax, h_err, err; linewidth = 3, markersize = 25, linestyle = :dash, label = "Err")
-scatterlines!(ax, h_err, err_an; linewidth = 3, markersize = 25, linestyle = :dash, label = "Err an")
-err_n = [nsteps_error(ABMaruyama(1.0e-1).m, sde, h, p, uti, test_func, nsteps) for (h, uti) in zip(h_err, ut)]
-lines!(ax, h_err, err_n, label = "Sum Less")
-axislegend(ax, position = :rb)
-fig
-
-# %%
-p_rest = (; u0 = -2.5, σ = 1.0, k = 1.0)
-h = 2.0e-2
-p = (nens = 10000000, p_rest...)
-sde = Sine(p);
-step_range = 1:1:6
-ut, err_an, err = zip([local_error(sde, EulerMaruyama, err_euler, err_euler, test_func, p, h; nsteps) for nsteps in step_range]...) .|> collect;
-# ut, err_an, err = zip(tmap(step_range) do nsteps
-#         show_progress = nsteps == maximum(step_range)
-#         local_error(sde, EulerMaruyama, err_euler, err_euler, test_func, p, h; nsteps, show_progress)
-#     end...) .|> collect
-
-# %%
-x = step_range
-fig, ax = figax(yscale = log10)
-scatterlines!(ax, x, err; linewidth = 3, markersize = 25, linestyle = :dash, label = "Err")
-scatterlines!(ax, x, err_an; linewidth = 3, markersize = 25, linestyle = :dash, label = "Err an")
-err_n = [err_euler_nstep(sde, h, p, uti, test_func, nsteps) for (nsteps, uti) in zip(x, ut)]
-lines!(ax, x, err_n, label = "Sum Less")
-axislegend(ax, position = :rb)
-fig
-
-# %%
-Random.seed!(42)
-p_rest = (; u0 = -2.5, σ = 1.0, k = 1.0)
-h = 2.0e-2
-p = (nens = 10000000, p_rest...)
-sde = Sine(p);
-step_range = 1:1:6
-ut, err_an, err = zip([local_error(sde, ABMaruyama, err_euler, err_ab, test_func, p, h; nsteps) for nsteps in step_range]...) .|> collect;
-# ut, err_an, err = zip(tmap(step_range) do nsteps
-#         show_progress = nsteps == maximum(step_range)
-#         local_error(sde, ABMaruyama, err_euler, err_ab, test_func, p, h; nsteps, show_progress)
-#     end...) .|> collect
-
-# %%
-x = step_range
-fig, ax = figax(yscale = log10)
-scatterlines!(ax, x, err; linewidth = 3, markersize = 25, linestyle = :dash, label = "Err")
-scatterlines!(ax, x, err_an; linewidth = 3, markersize = 25, linestyle = :dash, label = "Err an")
-err_n = [err_ab_nstep(sde, h, p, uti, test_func, nsteps) for (nsteps, uti) in zip(x, ut)]
-lines!(ax, x, err_n, label = "Sum Less")
-axislegend(ax, position = :rb)
-fig
-
-# %% [markdown]
-# # One-step error for Phi4
-
-# %%
-p_rest = (; u0 = 0.9, σ = 1.0, a = 1.0, b = 1.0)
-p = (nens = 5000000, p_rest...)
-sde = Phi4(p);
-nsteps = 3
-ut, err_an, err = zip(
-    [local_error(sde, EulerMaruyama, err_euler, err_euler, test_func, p, h; nsteps) for h in h_err]...
-) .|> collect;
-
-# %%
-fig, ax = figax(yscale = log10, xscale = log10)
-scatterlines!(ax, h_err, err; linewidth = 3, markersize = 25, linestyle = :dash, label = "Err")
-scatterlines!(ax, h_err, err_an; linewidth = 3, markersize = 25, linestyle = :dash, label = "Err an")
-err_n = [(nsteps + 1) * abs(err_euler(sde, h, p, p.u0, 0.5 * (uti + p.u0), test_func)) for (h, uti) in zip(h_err, ut)]
-lines!(ax, h_err, err_n, label = "Absolute Sum")
-fig
-
-# %%
-p_rest = (; u0 = 0.9, σ = 1.0, a = 1.0, b = 1.0)
-p = (nens = 5000000, p_rest...)
-sde = Phi4(p);
-nsteps = 5
-ut, err_an, err = zip([local_error(sde, ABMaruyama, err_euler, err_ab, test_func, p, h; nsteps) for h in h_err]...) .|> collect;
-
-# %%
-fig, ax = figax(yscale = log10, xscale = log10)
-scatterlines!(ax, h_err, err; linewidth = 3, markersize = 25, linestyle = :dash, label = "Err")
-scatterlines!(ax, h_err, err_an; linewidth = 3, markersize = 25, linestyle = :dash, label = "Err an")
-err_n = [err_ab_nstep(sde, h, p, uti, test_func, nsteps) for (h, uti) in zip(h_err, ut)]
-scatterlines!(ax, h_err, err_n, label = "Sum Less")
-axislegend(ax, position = :rb)
-fig
-
-# %% [markdown]
-# # Convergence for the Additive SDE
 
 # %%
 h_cvg = @. 1 / 2^(3:6)
@@ -421,5 +257,3 @@ ffull = (e2, e1)
 
 # %%
 h^(3 / 2), h^2
-
-# %%
